@@ -9,4 +9,5 @@ export {
 } from './types'
 
 export { AccountProvider } from './account-provider'
+export { PersistentAccountProvider } from './persistent-account-provider'
 export { setupFromSeed } from './seed'

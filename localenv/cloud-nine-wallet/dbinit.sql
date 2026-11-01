@@ -21,3 +21,11 @@ ALTER DATABASE global_bank_backend OWNER TO global_bank_backend;
 CREATE USER global_bank_auth WITH PASSWORD 'global_bank_auth';
 CREATE DATABASE global_bank_auth;
 ALTER DATABASE global_bank_auth OWNER TO global_bank_auth;
+
+CREATE USER cape_town_node_backend WITH PASSWORD 'cape_town_node_backend';
+CREATE DATABASE cape_town_node_backend;
+ALTER DATABASE cape_town_node_backend OWNER TO cape_town_node_backend;
+
+CREATE USER cape_town_node_auth WITH PASSWORD 'cape_town_node_auth';
+CREATE DATABASE cape_town_node_auth;
+ALTER DATABASE cape_town_node_auth OWNER TO cape_town_node_auth;

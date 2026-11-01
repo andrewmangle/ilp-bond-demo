@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>University Payments</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="rolebar" class="rolebar"></div>
+<main>
+  <h1>Students</h1>
+  <p class="sub">Local Rafiki network: HBCU node (USD), Hague node (EUR) and Cape Town node (ZAR).</p>
+
+  <div id="bank-note" hidden>
+    <section>
+      <h2>You're acting as a central bank</h2>
+      <p>Pick a student in <b>Acting as</b> at the top to see their account and send money. Central-bank tools are on the <a href="/central-bank">Central Bank</a> page.</p>
+    </section>
+  </div>
+
+  <div id="student-view" hidden>
+    <div class="grid">
+      <section>
+        <div class="head"><h2>Your account</h2><button class="secondary" id="refresh" type="button">Refresh</button></div>
+        <dl class="facts" id="me"></dl>
+      </section>
+
+      <section>
+        <h2>Send money</h2>
+        <form id="quote-form">
+          <label for="s-receiver">To</label>
+          <select id="s-receiver" required></select>
+          <label for="s-amount">Amount (your currency)</label>
+          <div class="row">
+            <input id="s-amount" required inputmode="decimal" placeholder="25.00">
+            <span class="cur" id="s-cur"></span>
+          </div>
+          <button type="submit">Get quote</button>
+        </form>
+        <div id="quote"></div>
+        <div id="send-msg"></div>
+      </section>
+    </div>
+  </div>
+
+  <section>
+    <h2>Directory</h2>
+    <p class="note">Every student's wallet address. Balances are private: each student sees their own, and each central bank sees its own node's.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Node</th><th>Name</th><th>Wallet address</th></tr></thead>
+        <tbody id="directory"><tr><td colspan="3">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script src="/common.js"></script>
+<script>
+  let me = null
+
+  function renderDirectory() {
+    const role = currentRole()
+    $('directory').innerHTML = roleState.directory.map((a) => `
+      <tr${role.kind === 'student' && a.node === role.node && a.id === role.accountId ? ' class="flash"' : ''}>
+        <td>${esc(a.nodeLabel)}</td><td>${esc(a.name)}</td><td class="wa">${esc(a.walletAddress)}</td>
+      </tr>`).join('') || '<tr><td colspan="3">No students yet.</td></tr>'
+  }
+
+  async function loadMe(flash) {
+    try {
+      me = await api('GET', '/api/me')
+    } catch (err) {
+      $('me').innerHTML = `<dd>${esc(err.message)}</dd>`
+      return
+    }
+    $('me').innerHTML = `
+      <dt>Name</dt><dd>${esc(me.name)}</dd>
+      <dt>Node</dt><dd>${esc(me.nodeLabel)}</dd>
+      <dt>Wallet address</dt><dd><code>${esc(me.walletAddress)}</code></dd>
+      <dt>Balance</dt><dd class="big${flash ? ' flash' : ''}">${fmt(me.balance)}</dd>`
+    $('s-cur').textContent = me.assetCode
+  }
+
+  function renderReceivers() {
+    const role = currentRole()
+    const prev = $('s-receiver').value
+    const others = roleState.directory.filter((a) => !(a.node === role.node && a.id === role.accountId))
+    $('s-receiver').innerHTML = others.map((a) => `<option value="${a.node}|${a.id}">${esc(a.name)} · ${esc(a.nodeLabel)} (${a.assetCode})</option>`).join('')
+    if (others.some((a) => `${a.node}|${a.id}` === prev)) $('s-receiver').value = prev
+  }
+
+  async function render(role) {
+    $('bank-note').hidden = role.kind === 'student'
+    $('student-view').hidden = role.kind !== 'student'
+    $('quote').innerHTML = ''
+    message($('send-msg'))
+    renderDirectory()
+    if (role.kind === 'student') {
+      renderReceivers()
+      await loadMe()
+    }
+  }
+
+  $('refresh').addEventListener('click', () => loadMe())
+  $('s-receiver').addEventListener('change', () => { $('quote').innerHTML = '' })
+
+  $('quote-form').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const button = e.target.querySelector('button[type=submit]')
+    const [receiverNode, receiverId] = $('s-receiver').value.split('|')
+    busy(button, true, 'Quoting…'); message($('send-msg')); $('quote').innerHTML = ''
+    try {
+      const q = await api('POST', '/api/quote', { receiverNode, receiverId, amount: $('s-amount').value })
+      $('quote').innerHTML = `
+        <div class="quote">
+          <dl class="facts">
+            <dt>To</dt><dd>${esc(q.receiver.name)} · ${esc(q.receiver.nodeLabel)}</dd>
+            <dt>You pay</dt><dd>${fmt(q.debitAmount)}</dd>
+            <dt>Receiver gets</dt><dd>≈ ${fmt(q.receiveAmount)}</dd>
+            ${q.rate ? `<dt>Rate</dt><dd>${esc(q.rate)}</dd>` : ''}
+            <dt>Quote valid until</dt><dd>${new Date(q.expiresAt).toLocaleTimeString()}</dd>
+          </dl>
+          ${q.rate ? `<p class="note">Your side is fixed: you pay the quoted amount. The receiving bank converts at its rate when the money arrives, so if it changes its rate before you confirm, ${esc(q.receiver.name)} gets the new-rate amount. If that is below ${fmt(q.minReceiveAmount)}, the payment fails and you aren't charged.</p>` : ''}
+          <button id="confirm" type="button">Confirm and send</button>
+          <button id="cancel" class="secondary" type="button">Cancel</button>
+        </div>`
+      $('cancel').onclick = () => { $('quote').innerHTML = '' }
+      $('confirm').onclick = async () => {
+        $('confirm').disabled = $('cancel').disabled = true
+        $('confirm').textContent = 'Sending…'
+        message($('send-msg'), 'Sending through Rafiki…', 'info')
+        try {
+          const p = await api('POST', '/api/pay', { quoteId: q.quoteId })
+          $('quote').innerHTML = ''
+          if (p.state === 'SENDING') message($('send-msg'), p.retrying
+            ? `Rafiki can't deliver this at the quoted rate (the receiving bank's rate has moved more than 1%). It keeps retrying for about 2½ minutes and then fails the payment. Nothing has been charged; the amount is on hold.`
+            : `Still sending. Press Refresh in a moment.`, 'info')
+          else if (p.state === 'FAILED' && !p.received) message($('send-msg'), `Payment failed: ${esc(p.error || 'unknown error')}. Nothing was charged.`)
+          else if (p.state === 'FAILED') message($('send-msg'), `Payment partly failed (${esc(p.error)}). Sent ${fmt(p.sent)}; ${esc(p.receiver.name)} received ${fmt(p.received)}.`)
+          else message($('send-msg'), `Sent ${fmt(p.sent)}. ${esc(p.receiver.name)} received ${fmt(p.received)}.${p.creditedByBank ? '' : ' Their bank hasn\'t booked it yet.'}`, 'ok')
+          $('s-amount').value = ''
+          await loadMe(true)
+        } catch (err) {
+          $('quote').innerHTML = ''
+          message($('send-msg'), esc(err.message))
+        }
+      }
+    } catch (err) {
+      message($('send-msg'), esc(err.message))
+    } finally { busy(button, false) }
+  })
+
+  initRoles('students', render)
+</script>
+</body>
+</html>

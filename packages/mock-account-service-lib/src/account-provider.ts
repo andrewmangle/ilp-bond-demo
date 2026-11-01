@@ -44,6 +44,8 @@ interface AccountsServer {
 
 export class AccountProvider implements AccountsServer {
   accounts = new Map<string, Account>()
+  // True when accounts were loaded from storage (PersistentAccountProvider), so seeding keeps them
+  restored = false
 
   async clearAccounts(): Promise<void> {
     this.accounts.clear()

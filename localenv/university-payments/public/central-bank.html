@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Central Bank · University Payments</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="rolebar" class="rolebar"></div>
+<main>
+  <h1>Central Bank</h1>
+  <p class="sub">Each university node is a central bank for its currency: it mints money into its treasury, funds students and sets its exchange rate against USD.</p>
+
+  <div id="student-note" hidden>
+    <section>
+      <h2>Not available to students</h2>
+      <p>Central-bank actions are only available to a central bank. Pick one in <b>Acting as</b> at the top.</p>
+    </section>
+  </div>
+
+  <div id="bank-view" hidden>
+    <div class="picker" id="picker"></div>
+    <div id="readonly-note"></div>
+
+    <div class="grid">
+      <section>
+        <h2>Treasury</h2>
+        <dl class="facts" id="treasury"><dd>Loading…</dd></dl>
+        <form id="mint-form" class="action">
+          <label for="m-amount">Mint new money into the treasury</label>
+          <div class="row"><input id="m-amount" required inputmode="decimal" placeholder="100000"><span class="cur node-cur"></span></div>
+          <button type="submit">Mint</button>
+        </form>
+        <div id="mint-msg"></div>
+      </section>
+
+      <section class="action">
+        <h2>Fund a student</h2>
+        <form id="fund-form">
+          <label for="f-student">Student</label>
+          <select id="f-student" required></select>
+          <label for="f-amount">Amount the student receives</label>
+          <div class="row"><input id="f-amount" required inputmode="decimal" placeholder="1000"><span class="cur node-cur"></span></div>
+          <button type="submit">Send from treasury</button>
+        </form>
+        <div id="fund-msg"></div>
+        <form id="open-form">
+          <label for="o-name">Open a student account</label>
+          <input id="o-name" required placeholder="Jordan Ellis">
+          <label for="o-funding">Initial funding from the treasury <span class="note">(optional)</span></label>
+          <div class="row"><input id="o-funding" inputmode="decimal" placeholder="0"><span class="cur node-cur"></span></div>
+          <button type="submit">Open account</button>
+        </form>
+        <div id="open-msg"></div>
+      </section>
+
+      <section>
+        <h2>Exchange rate</h2>
+        <div id="rate"><p>Loading…</p></div>
+        <form id="rate-form" class="action">
+          <label for="r-value">New rate: <span class="node-cur"></span> per 1 USD</label>
+          <input id="r-value" required inputmode="decimal">
+          <button type="submit">Set rate</button>
+        </form>
+        <div id="rate-msg"></div>
+      </section>
+    </div>
+
+    <section>
+      <h2>Demo clock</h2>
+      <form id="clock-form" class="row">
+        <select id="clock-speed" aria-label="How fast demo time runs"></select>
+        <button type="submit" style="margin-top:0">Set speed</button>
+        <button type="button" id="clock-pause" class="secondary" style="margin-top:0"></button>
+      </form>
+      <p class="note" id="clock-note"></p>
+      <div id="clock-msg"></div>
+    </section>
+
+    <section class="action">
+      <div class="head"><h2>Activity</h2><button class="secondary" id="refresh" type="button">Refresh</button></div>
+      <p class="note">Every payment into or out of this node, newest first, from Rafiki. Mints are shown too.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Time</th><th>Type</th><th>From</th><th>To</th><th class="num">Sent</th><th class="num">Received</th><th>State</th></tr></thead>
+          <tbody id="activity"><tr><td colspan="7">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="action">
+      <h2>Accounts on this node</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Wallet address</th><th class="num">Balance</th></tr></thead>
+          <tbody id="accounts"><tr><td colspan="3">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script src="/common.js"></script>
+<script>
+  let selected = null // node shown on the page
+  const isOwnNode = () => currentRole().kind === 'bank' && currentRole().node === selected
+  const nodeInfo = () => roleState.nodes.find((n) => n.key === selected)
+  const base = () => `/api/bank/${selected}`
+
+  function renderPicker() {
+    $('picker').innerHTML = roleState.nodes.map((n) =>
+      `<button type="button" data-node="${n.key}" class="${n.key === selected ? 'active' : ''}">${esc(n.label)} (${n.currency})</button>`).join('')
+    $('picker').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { selected = b.dataset.node; renderNode() }))
+  }
+
+  async function loadOverview() {
+    const o = await api('GET', `${base()}/overview`)
+    const [own, ...other] = o.moneySupply
+    $('treasury').innerHTML = `
+      <dt>Money supply</dt><dd><span class="big">${fmt(own)}</span><br><span class="note">held in ${own?.accounts ?? 0} accounts on this node${other.length ? `; also ${other.map(fmt).join(', ')} in accounts held in other currencies` : ''}</span></dd>
+      <dt>Treasury</dt><dd>${o.treasury ? `${fmt(o.treasury.balance)}<br><code>${esc(o.treasury.walletAddress)}</code>` : 'No treasury account'}</dd>
+      <dt>Rafiki liquidity</dt><dd>${fmt(o.rafikiLiquidity)} <span class="note">(${esc(o.currency)} asset)</span></dd>
+      ${o.peerLiquidity.map((p) => `<dt>Peer ${esc(p.peer.replace('test.', ''))}</dt><dd>${fmt(p.liquidity)}</dd>`).join('')}`
+  }
+
+  async function loadRate() {
+    const r = await api('GET', `${base()}/rate`)
+    $('rate').innerHTML = `
+      <p class="big">1 USD = ${r.perUsd === null ? '?' : Number(r.perUsd).toLocaleString(undefined, { maximumFractionDigits: 6 })} ${esc(r.currency)}</p>
+      ${r.editable ? '' : '<p class="note">USD is the base currency of the network, so this node\'s rate is always 1. The other two central banks set theirs against it.</p>'}
+      ${r.history.length ? `<p class="note">Changes: ${r.history.map((h) => `${fmtTime(h.at)}: ${h.oldPerUsd ?? '?'} → ${h.perUsd}`).join('; ')}</p>` : ''}`
+    $('rate-form').hidden = !isOwnNode() || !r.editable
+    if (!$('r-value').value) $('r-value').placeholder = r.perUsd ?? ''
+  }
+
+  async function loadActivity() {
+    const rows = await api('GET', `${base()}/activity`)
+    $('activity').innerHTML = rows.map((r) => `
+      <tr>
+        <td>${fmtTime(r.at)}</td>
+        <td><span class="tag ${esc(r.type)}">${esc(r.type)}</span></td>
+        <td>${esc(r.from)}</td><td>${esc(r.to)}</td>
+        <td class="num">${fmt(r.sent)}</td><td class="num">${fmt(r.received)}</td>
+        <td>${r.state === 'FAILED' ? `<span class="tag failed" title="${esc(r.error)}">FAILED</span>` : esc(r.state.toLowerCase())}</td>
+      </tr>`).join('') || '<tr><td colspan="7">No payments yet.</td></tr>'
+  }
+
+  async function loadAccounts() {
+    const accounts = await api('GET', `${base()}/accounts`)
+    const prev = $('f-student').value
+    $('f-student').innerHTML = accounts
+      .filter((a) => a.assetCode === nodeInfo().currency)
+      .map((a) => `<option value="${a.id}">${esc(a.name)} · ${fmt(a.balance)}</option>`).join('')
+    if (accounts.some((a) => a.id === prev)) $('f-student').value = prev
+    $('accounts').innerHTML = accounts.map((a) => `
+      <tr><td>${esc(a.name)}</td><td class="wa">${esc(a.walletAddress)}</td><td class="num">${fmt(a.balance)}</td></tr>`).join('')
+  }
+
+  const safely = (fn, el) => fn().catch((err) => { el.innerHTML = `<p class="msg err">${esc(err.message)}</p>` })
+
+  async function reload() {
+    const loads = [safely(loadOverview, $('treasury')), safely(loadRate, $('rate'))]
+    if (isOwnNode()) loads.push(safely(loadActivity, $('activity')), safely(loadAccounts, $('accounts')))
+    await Promise.all(loads)
+  }
+
+  function renderNode() {
+    renderPicker()
+    document.querySelectorAll('.node-cur').forEach((el) => { el.textContent = nodeInfo().currency })
+    document.querySelectorAll('.action').forEach((el) => { el.hidden = !isOwnNode() })
+    for (const id of ['mint-msg', 'fund-msg', 'open-msg', 'rate-msg']) message($(id))
+    const role = currentRole()
+    message($('readonly-note'), isOwnNode() ? '' :
+      `You're acting as the ${esc(roleState.nodes.find((n) => n.key === role.node).bankName)}, so you can only view the ${esc(nodeInfo().label)}'s public figures. Switch role to act for it.`, 'info')
+    return reload()
+  }
+
+  function render(role) {
+    $('student-note').hidden = role.kind === 'bank'
+    $('bank-view').hidden = role.kind !== 'bank'
+    if (role.kind !== 'bank') return
+    renderClock()
+    selected = role.node
+    return renderNode()
+  }
+
+  async function submit(e, label, msgEl, run) {
+    e.preventDefault()
+    const button = e.target.querySelector('button[type=submit]')
+    busy(button, true, label); message(msgEl)
+    try {
+      message(msgEl, await run(), 'ok')
+      e.target.reset()
+      await reload()
+    } catch (err) {
+      message(msgEl, esc(err.message))
+    } finally { busy(button, false) }
+  }
+
+  const paymentResult = (p) => p.state === 'COMPLETED'
+    ? `${esc(p.receiver.name)} received ${fmt(p.received)}. The treasury paid ${fmt(p.sent)}.`
+    : p.state === 'SENDING' ? 'Rafiki is still sending this payment. Check Activity in a moment.'
+    : `Payment ${esc(p.state.toLowerCase())}: ${esc(p.error || '')}`
+
+  $('mint-form').addEventListener('submit', (e) => submit(e, 'Minting…', $('mint-msg'), async () => {
+    const r = await api('POST', `${base()}/mint`, { amount: $('m-amount').value })
+    return `Minted ${fmt(r.minted)}. Treasury now holds ${fmt(r.treasuryBalance)}.`
+  }))
+
+  $('fund-form').addEventListener('submit', (e) => submit(e, 'Sending…', $('fund-msg'), async () =>
+    paymentResult(await api('POST', `${base()}/fund`, { accountId: $('f-student').value, amount: $('f-amount').value }))))
+
+  $('open-form').addEventListener('submit', (e) => submit(e, 'Opening…', $('open-msg'), async () => {
+    const r = await api('POST', `${base()}/accounts`, { name: $('o-name').value, initialFunding: $('o-funding').value })
+    await refreshDirectory()
+    return `Opened <b>${esc(r.account.name)}</b> with ${fmt(r.account.balance)}.<br>Wallet address: <code>${esc(r.account.walletAddress)}</code>`
+  }))
+
+  $('rate-form').addEventListener('submit', (e) => submit(e, 'Setting…', $('rate-msg'), async () => {
+    const r = await api('POST', `${base()}/rate`, { perUsd: $('r-value').value })
+    return `1 USD = ${r.perUsd} ${esc(r.currency)} (was ${r.oldPerUsd ?? '?'}). New quotes use it from ${new Date(r.effectiveBy).toLocaleTimeString()}, once Rafiki's 15-second rate cache refreshes. Payments already quoted still charge the sender the quoted amount; this node converts what arrives at the new rate, and fails a payment that would deliver more than 1% below its quote.`
+  }))
+
+  $('refresh').addEventListener('click', () => reload())
+
+  function renderClock() {
+    if (!demoClock) return
+    $('clock-speed').innerHTML = demoClock.speeds.map((sp) => `<option value="${sp}">${esc(speedText(sp))}</option>`).join('')
+    $('clock-speed').value = String(demoClock.secondsPerDay)
+    $('clock-pause').textContent = demoClock.paused ? 'Resume' : 'Pause'
+    $('clock-note').textContent = demoClock.paused
+      ? `Paused on demo day ${demoClock.day}. No coupon dates arrive and no coupons or principal are paid until you resume.`
+      : `It is demo day ${demoClock.day}; the next day starts in ${demoClock.secondsToNextDay} s. Coupon dates and maturity follow this clock. Demo time only runs while the app is running. Set the speed before issuers approve their coupon grants: a coupons grant's period is fixed in real time when it is approved.`
+  }
+  $('clock-pause').addEventListener('click', async () => {
+    busy($('clock-pause'), true, demoClock.paused ? 'Resuming…' : 'Pausing…'); message($('clock-msg'))
+    try {
+      demoClock = await api('POST', '/api/clock', { paused: !demoClock.paused })
+      $('clock-pause').dataset.label = ''
+      message($('clock-msg'), demoClock.paused ? 'Paused. Coupon and principal payments have stopped.' : 'Resumed.', 'ok')
+    } catch (err) {
+      message($('clock-msg'), esc(err.message))
+    } finally {
+      busy($('clock-pause'), false); renderClock(); refreshClock()
+    }
+  })
+  $('clock-form').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const button = e.target.querySelector('button[type=submit]')
+    busy(button, true, 'Setting…'); message($('clock-msg'))
+    try {
+      demoClock = await api('POST', '/api/clock', { secondsPerDay: Number($('clock-speed').value) })
+      renderClock(); $('demo-day').textContent = clockText()
+      message($('clock-msg'), `Demo time now runs at ${esc(speedText(demoClock.secondsPerDay))}.`, 'ok')
+    } catch (err) {
+      message($('clock-msg'), esc(err.message))
+    } finally { busy(button, false) }
+  })
+
+  initRoles('bank', render)
+</script>
+</body>
+</html>

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control · University Payments</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  .ok-dot, .bad-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+  .ok-dot { background: #1f9d55; }
+  .bad-dot { background: var(--err); }
+  .confirm { margin-top: 12px; padding: 12px; border: 1px solid #f0b7b2; background: #fdecea; border-radius: 8px; }
+  .confirm button { margin-right: 6px; }
+  button.danger { background: var(--err); }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .controls button, .controls select { margin: 0; width: auto; }
+</style>
+</head>
+<body>
+<div id="rolebar" class="rolebar"></div>
+<main>
+  <h1>Demo control</h1>
+  <p class="sub">Clock, seed and reset, and whether everything is up.</p>
+
+  <div id="not-bank" hidden>
+    <section><h2>Central banks only</h2><p>The demo controls are for a central bank. Pick one in <b>Acting as</b> at the top. The health check below is open to everyone.</p></section>
+  </div>
+
+  <div id="bank-view" hidden>
+    <div class="grid">
+      <section>
+        <h2>Demo clock</h2>
+        <p class="big" id="c-day">Day …</p>
+        <p class="note" id="c-note"></p>
+        <div class="controls">
+          <button type="button" id="c-pause"></button>
+          <button type="button" id="c-jump" class="secondary">Jump ahead 1 day</button>
+          <select id="c-speed" aria-label="Speed"></select>
+          <button type="button" id="c-speed-set" class="secondary">Set speed</button>
+        </div>
+        <div id="c-msg"></div>
+      </section>
+
+      <section>
+        <h2>Seed and reset</h2>
+        <p><b>Seed Demo</b> resets, then sets up the starting point:</p>
+        <ul class="note">
+          <li>The treasuries on all three nodes are funded.</li>
+          <li>Jordan (HBCU), Sophie (Hague) and Amara (Cape Town) are funded students.</li>
+          <li>The Ellis Family Savings account on Cape Town is ready.</li>
+          <li>Amara's 10,000 ZAR bond at 9% for 365 days is issued, with no holdings yet.</li>
+        </ul>
+        <p><b>Reset Demo</b> wipes all demo data and returns the three mock banks to their seeded accounts and balances. The demo clock goes back to day 1.</p>
+        <div class="controls">
+          <button type="button" id="seed">Seed Demo</button>
+          <button type="button" id="reset" class="danger">Reset Demo</button>
+        </div>
+        <div id="confirm"></div>
+        <div id="s-msg"></div>
+      </section>
+    </div>
+  </div>
+
+  <section>
+    <div class="head"><h2>Health</h2><span class="note" id="h-at"></span></div>
+    <div id="h-summary"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Node</th><th>Mock bank</th><th>Admin API</th><th>Open Payments</th><th>Auth</th></tr></thead>
+        <tbody id="h-nodes"></tbody>
+      </table>
+    </div>
+    <dl class="facts" id="h-app" style="margin-top:12px"></dl>
+  </section>
+</main>
+
+<script src="/common.js"></script>
+<script>
+  const dot = (c) => `<span class="${c.ok ? 'ok-dot' : 'bad-dot'}"></span>${c.ok ? 'up' : `down${c.detail ? ` <span class="note">${esc(c.detail)}</span>` : ''}`}`
+
+  async function loadHealth() {
+    let h
+    try {
+      h = await api('GET', '/api/demo/health')
+    } catch (err) {
+      $('h-summary').innerHTML = `<div class="banner err">The demo app is not answering: ${esc(err.message)}</div>`
+      return
+    }
+    $('h-at').textContent = `checked ${new Date(h.at).toLocaleTimeString()}`
+    $('h-summary').innerHTML = h.ok ? '<div class="banner ok">Everything is up.</div>' : '<div class="banner err">Something is down: see below.</div>'
+    $('h-nodes').innerHTML = h.nodes.map((n) => `<tr><td><b>${esc(n.label)}</b></td>${['mockBank', 'adminApi', 'openPayments', 'auth'].map((k) => `<td>${dot(n.checks[k])}</td>`).join('')}</tr>`).join('')
+    const s = h.scheduler
+    $('h-app').innerHTML = `
+      <dt>Demo app</dt><dd>${dot(h.app)} <span class="note">for ${Math.round(h.app.uptimeSeconds / 60)} min</span></dd>
+      <dt>Scheduler</dt><dd>${dot(s)} <span class="note">coupons ran ${s.lastRunSecondsAgo.coupons ?? '?'} s ago, recurring purchases ${s.lastRunSecondsAgo.plans ?? '?'} s ago${s.paused ? '; clock paused, so nothing is paid' : ''}${s.maintenance ? '; reset in progress' : ''}</span></dd>
+      <dt>Demo data</dt><dd>${h.counts.bonds} bonds, ${h.counts.holdings} holdings, ${h.counts.plans} plans, ${h.counts.payments} payments by the app</dd>`
+    demoClock = h.clock
+    renderClock()
+  }
+
+  function renderClock() {
+    if (!demoClock) return
+    $('c-day').textContent = `Day ${demoClock.day}${demoClock.paused ? ' · paused' : ''}`
+    $('c-note').textContent = demoClock.paused
+      ? 'Paused: no coupon dates or recurring purchases come due, so nothing is paid.'
+      : `1 day = ${speedText(demoClock.secondsPerDay).replace('1 day = ', '')}; the next day starts in ${demoClock.secondsToNextDay} s. Set the speed before approving grants.`
+    $('c-pause').textContent = demoClock.paused ? 'Resume' : 'Pause'
+    if (!$('c-speed').options.length) $('c-speed').innerHTML = demoClock.speeds.map((sp) => `<option value="${sp}">${esc(speedText(sp))}</option>`).join('')
+    if (document.activeElement !== $('c-speed')) $('c-speed').value = String(demoClock.secondsPerDay)
+    $('demo-day').textContent = clockText()
+  }
+
+  async function clockAction(body, label) {
+    message($('c-msg'))
+    try {
+      demoClock = await api('POST', '/api/clock', body)
+      renderClock()
+      message($('c-msg'), label(demoClock), 'ok')
+    } catch (err) { message($('c-msg'), esc(err.message)) }
+  }
+  $('c-pause').addEventListener('click', () => clockAction({ paused: !demoClock.paused }, (c) => (c.paused ? 'Paused. Coupons, principal and recurring purchases have stopped.' : 'Resumed.')))
+  $('c-jump').addEventListener('click', () => clockAction({ jumpDays: 1 }, (c) => `Jumped to day ${c.day}. Anything that came due is being paid now.`))
+  $('c-speed-set').addEventListener('click', () => clockAction({ secondsPerDay: Number($('c-speed').value) }, (c) => `Demo time now runs at ${esc(speedText(c.secondsPerDay))}.`))
+
+  // Seed and Reset both wipe the demo: ask first, on the page
+  function ask(action) {
+    const what = action === 'seed'
+      ? 'Seed Demo first resets everything (all bonds, holdings, grants, plans and balances), then sets up the starting point.'
+      : 'Reset Demo wipes all bonds, holdings, grants, plans and payments made by the app, returns the mock banks to their seeded balances and puts the clock back to day 1.'
+    $('confirm').innerHTML = `<div class="confirm"><p><b>Are you sure?</b> ${what} It can't be undone and takes about half a minute.</p>
+      <button type="button" class="danger" id="confirm-yes">Yes, ${action === 'seed' ? 'reset and seed' : 'reset'}</button>
+      <button type="button" class="secondary" id="confirm-no">Cancel</button></div>`
+    $('confirm-no').onclick = () => { $('confirm').innerHTML = '' }
+    $('confirm-yes').onclick = () => go(action)
+  }
+  async function go(action) {
+    $('confirm').innerHTML = ''
+    for (const id of ['seed', 'reset']) $(id).disabled = true
+    message($('s-msg'), action === 'seed' ? 'Resetting, then seeding… the mock banks restart, so this takes about half a minute.' : 'Resetting… the mock banks restart, so this takes about half a minute.', 'info')
+    try {
+      const r = await api('POST', `/api/demo/${action}`, { confirm: true })
+      if (action === 'seed') {
+        message($('s-msg'), `Seeded. Treasuries: ${Object.values(r.treasuries).map(fmt).join(', ')}.<br>Students: ${r.students.map((s) => `${esc(s.name)} (${esc(s.nodeLabel)}) ${fmt(s.balance)}`).join(', ')}.<br>Bond: <b>${esc(r.bond.name)}</b> by Amara, ${fmt(r.bond.size)} at ${r.bond.annualRate}% for ${r.bond.termDays} days.`, 'ok')
+      } else {
+        message($('s-msg'), `Reset in ${r.reset ? r.seconds : '?'} s. The demo clock is on day ${r.clock.day}.`, 'ok')
+      }
+      await refreshDirectory().catch(() => {})
+    } catch (err) {
+      message($('s-msg'), esc(err.message))
+    } finally {
+      for (const id of ['seed', 'reset']) $(id).disabled = false
+      loadHealth()
+    }
+  }
+  $('seed').addEventListener('click', () => ask('seed'))
+  $('reset').addEventListener('click', () => ask('reset'))
+
+  initRoles('control', (role) => {
+    $('not-bank').hidden = role.kind === 'bank'
+    $('bank-view').hidden = role.kind !== 'bank'
+    loadHealth()
+  })
+  setInterval(loadHealth, 5000)
+</script>
+</body>
+</html>

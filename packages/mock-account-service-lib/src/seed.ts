@@ -72,6 +72,8 @@ export async function setupFromSeed(
     getPeerByAddressAndAsset
   } = createRequesters(requesterApolloClient, logger)
 
+  // Keyed by code for accounts (the first asset listed for a code), and by `code:scale` so the peering asset
+  // can be a higher-precision version of an account asset (e.g. accounts in USD scale 2, peering in USD scale 9)
   const assets: Record<string, Asset> = {}
   for (const { code, scale, liquidity, liquidityThreshold } of config.seed
     .assets) {
@@ -84,7 +86,8 @@ export async function setupFromSeed(
       await depositAssetLiquidity(asset.id, liquidity, v4())
     }
 
-    assets[code] = asset
+    assets[code] = assets[code] || asset
+    assets[`${code}:${scale}`] = asset
     logger.debug({ asset, liquidity })
 
     const { fees } = config.seed
@@ -96,7 +99,13 @@ export async function setupFromSeed(
 
   logger.debug('Finished seeding assets')
 
-  const peeringAsset = config.seed.peeringAsset
+  // `USD` (the account asset for that code) or `USD:9` (that code at that scale)
+  const peeringAsset = assets[config.seed.peeringAsset]
+  if (!peeringAsset) {
+    throw new Error(
+      `Peering asset ${config.seed.peeringAsset} is not in the seed's assets`
+    )
+  }
 
   const host = config.isTenant
     ? config.seed.tenants[0].walletAddressPrefix
@@ -112,15 +121,18 @@ export async function setupFromSeed(
       peerStaticIlpAddress = peer.peerIlpAddress
     }
 
-    const existingPeer = await getPeerByAddressAndAsset(
-      peerStaticIlpAddress,
-      assets[peeringAsset].id
-    )
+    // The lookup matches by destination address (routes/prefixes), so only accept an exact staticIlpAddress match
+    const getExactPeer = async (address: string) => {
+      const found = await getPeerByAddressAndAsset(address, peeringAsset.id)
+      return found?.staticIlpAddress === address ? found : null
+    }
 
-    if (
-      existingPeer &&
-      existingPeer.staticIlpAddress === peerStaticIlpAddress
-    ) {
+    // An unreachable peer seeded on a previous run is stored under its full (`unreachable.`) address, so fall back to that
+    const existingPeer =
+      (await getExactPeer(peerStaticIlpAddress)) ??
+      (isUnreachablePeer ? await getExactPeer(peer.peerIlpAddress) : null)
+
+    if (existingPeer) {
       // Needed for refreshing routes and staticIlpAddress when changed in seed (when going back and forth from multihop mode)
       await updatePeer({
         id: existingPeer.id,
@@ -133,7 +145,7 @@ export async function setupFromSeed(
     const newPeer = await createPeer(
       peer.peerIlpAddress,
       peer.peerUrl,
-      assets[peeringAsset].id,
+      peeringAsset.id,
       peer.name,
       peer.routes || [],
       peer.liquidityThreshold,
@@ -156,7 +168,7 @@ export async function setupFromSeed(
     logger.debug('autopeering url: ', config.testnetAutoPeerUrl)
     const autoPeerResponse = await createAutoPeer(
       config.testnetAutoPeerUrl,
-      assets[peeringAsset].id
+      peeringAsset.id
     ).catch((e) => {
       logger.debug('error on autopeering: ', e)
       return
@@ -164,8 +176,11 @@ export async function setupFromSeed(
     logger.debug(autoPeerResponse)
   }
 
-  // Clear the accounts before seeding.
-  await mockAccounts.clearAccounts()
+  // Clear the accounts before seeding, unless they were restored from storage: then keep them (and their
+  // balances) and only add seeded accounts that are missing
+  if (!mockAccounts.restored) {
+    await mockAccounts.clearAccounts()
+  }
 
   for (const account of config.seed.accounts) {
     const accountAsset = assets[account.assetCode]
@@ -176,20 +191,22 @@ export async function setupFromSeed(
       )
     }
 
-    await mockAccounts.create(
-      account.id,
-      account.path,
-      account.name,
-      accountAsset.code,
-      accountAsset.scale,
-      accountAsset.id
-    )
-    if (account.initialBalance) {
-      await mockAccounts.credit(
+    if (!(mockAccounts.restored && (await mockAccounts.get(account.id)))) {
+      await mockAccounts.create(
         account.id,
-        BigInt(account.initialBalance),
-        false
+        account.path,
+        account.name,
+        accountAsset.code,
+        accountAsset.scale,
+        accountAsset.id
       )
+      if (account.initialBalance) {
+        await mockAccounts.credit(
+          account.id,
+          BigInt(account.initialBalance),
+          false
+        )
+      }
     }
 
     if (account.skipWalletAddressCreation) {

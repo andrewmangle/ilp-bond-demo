@@ -1,0 +1,93 @@
+assets:
+  - code: ZAR
+    scale: 2
+    liquidity: 2000000000000
+    liquidityThreshold: 10000000
+  # Peering with the HBCU and Hague nodes is done in USD
+  - code: USD
+    scale: 2
+    liquidity: 100000000
+    liquidityThreshold: 10000000
+# Peer in USD at scale 9, so small payments (daily coupons) aren't lost to rounding at the USD hop between nodes
+  - code: USD
+    scale: 9
+    liquidity: 1000000000000000000
+    liquidityThreshold: 1000000000000
+peeringAsset: 'USD:9'
+peers:
+  - initialLiquidity: '100000000000000000'
+    peerUrl: http://cloud-nine-wallet-backend:3002
+    peerIlpAddress: test.cloud-nine-wallet
+    liquidityThreshold: 1000000
+    tokens:
+      incoming:
+        - cloud-nine-to-cape-town
+      outgoing: cape-town-to-cloud-nine
+    routes:
+      - "test.cloud-nine-wallet"
+  - initialLiquidity: '100000000000000000'
+    peerUrl: http://happy-life-bank-backend:3002
+    peerIlpAddress: test.happy-life-bank
+    liquidityThreshold: 1000000
+    tokens:
+      incoming:
+        - happy-to-cape-town
+      outgoing: cape-town-to-happy
+    routes:
+      - "test.happy-life-bank"
+accounts:
+  - name: 'Cape Town Central Bank'
+    path: accounts/treasury
+    id: 0b6f2a1e-5c3d-4e8f-9a7b-1c2d3e4f5a03
+    initialBalance: 0
+    brunoEnvVar: treasuryWalletAddress
+    assetCode: ZAR
+  - name: 'Amara Dube'
+    path: accounts/amara
+    id: 0b6f2a1e-5c3d-4e8f-9a7b-1c2d3e4f5a05
+    initialBalance: 0
+    brunoEnvVar: amaraWalletAddress
+    assetCode: ZAR
+  - name: 'Ellis Family Savings'
+    path: accounts/ellis-family
+    id: 0b6f2a1e-5c3d-4e8f-9a7b-1c2d3e4f5a06
+    initialBalance: 0
+    brunoEnvVar: ellisFamilyWalletAddress
+    assetCode: ZAR
+  - name: 'Thabo Nkosi'
+    path: accounts/tnkosi
+    id: 1af200a9-ed70-4ad1-86bf-59fa4cd5501e
+    initialBalance: 500000000
+    brunoEnvVar: tnkosiWalletAddress
+    assetCode: ZAR
+  - name: 'Naledi Dlamini'
+    path: accounts/ndlamini
+    id: 9019cd10-d903-47e6-ba8f-b0373a42b89b
+    initialBalance: 500000000
+    brunoEnvVar: ndlaminiWalletAddress
+    assetCode: ZAR
+  - name: 'Table Mountain Traders'
+    path: accounts/tmtraders
+    id: e99ce2ed-4127-4c5f-9f95-83f7d0051466
+    initialBalance: 2000000000
+    brunoEnvVar: tmtradersWalletAddress
+    assetCode: ZAR
+rates:
+  USD:
+    EUR: 0.92
+    ZAR: 18.2
+  EUR:
+    USD: 1.087
+    ZAR: 19.783
+  ZAR:
+    USD: 0.05495
+    EUR: 0.05055
+fees:
+  - fixed: 0
+    basisPoints: 0
+    asset: ZAR
+    scale: 2
+  - fixed: 0
+    basisPoints: 0
+    asset: USD
+    scale: 2

@@ -52,7 +52,7 @@ export interface Tenant {
 
 export interface SeedInstance {
   assets: Array<Asset>
-  peeringAsset: string
+  peeringAsset: string // asset code, or code:scale
   peers: Array<Peering>
   accounts: Array<Account>
   fees: Array<Fee>

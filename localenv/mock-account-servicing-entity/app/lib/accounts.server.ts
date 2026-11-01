@@ -1,4 +1,7 @@
-import { AccountProvider } from 'mock-account-service-lib'
+import {
+  AccountProvider,
+  PersistentAccountProvider
+} from 'mock-account-service-lib'
 import { v4 as uuid } from 'uuid'
 
 export type AccountWithAsset = {
@@ -19,7 +22,10 @@ export type AccountWithBalance = {
   assetScale: number
 }
 
-export const mockAccounts = new AccountProvider()
+// With MOCK_ACCOUNTS_FILE set, accounts and balances are kept in that file and survive a restart
+export const mockAccounts = process.env.MOCK_ACCOUNTS_FILE
+  ? new PersistentAccountProvider(process.env.MOCK_ACCOUNTS_FILE)
+  : new AccountProvider()
 
 export async function createAccount({
   path,

@@ -1,0 +1,155 @@
+name: ct
+services:
+  cape-town-mock-ase:
+    hostname: cape-town-node
+    image: rafiki-mock-ase
+    pull_policy: never
+    restart: always
+    networks:
+      - rafiki
+    ports:
+      - '3032:80'
+    environment:
+      MOCK_ACCOUNTS_FILE: /workspace/state/accounts.json # accounts and balances survive restarts
+      LOG_LEVEL: debug
+      PORT: 80
+      SEED_FILE_LOCATION: /workspace/seed.yml
+      KEY_FILE: /workspace/private-key.pem
+      OPEN_PAYMENTS_URL: ${CAPE_TOWN_NODE_OPEN_PAYMENTS_URL:-https://cape-town-node-backend}
+      GRAPHQL_URL: http://cape-town-node-backend:3001/graphql
+      SIGNATURE_VERSION: 1
+      SIGNATURE_SECRET: iyIgCprjb9uL8wFckR+pLEkJWMB7FJhgkvqhTQR/964=
+      IDP_SECRET: 2pEcn2kkCclbOHQiGNEwhJ0rucATZhrA807HTm2rNXE=
+      DB_ENCRYPTION_SECRET: 'zO9KogehJECHReHgQr+ZWGkmgOD4AYa4ksUxALSwgM8='
+      DISPLAY_NAME: Cape Town Node
+      DISPLAY_ICON: bank-icon.svg
+      OPERATOR_TENANT_ID: f2279e57-1b7d-4634-9e25-97ac825cc942
+      FRONTEND_PORT: 5010
+      AUTH_IDP_SERVICE_DOMAIN: http://localhost:5009
+      AUTH_SERVER_DOMAIN: http://localhost:5006
+      INTERACTION_RETURN_URL: http://localhost:3032
+    volumes:
+      - cape-town-mock-bank-state:/workspace/state
+      - ../cape-town-node/seed.yml:/workspace/seed.yml
+      - ../cape-town-node/private-key.pem:/workspace/private-key.pem
+    depends_on:
+      cape-town-backend:
+        condition: service_healthy
+      happy-life-mock-ase:
+        condition: service_started
+  cape-town-backend:
+    hostname: cape-town-node-backend
+    image: rafiki-backend
+    pull_policy: never
+    volumes:
+      - type: bind
+        source: ../../packages/backend/src
+        target: /home/rafiki/packages/backend/src
+        read_only: true
+    restart: always
+    privileged: true
+    ports:
+      - "5000:80"
+      - "5001:3001"
+      - "5002:3002"
+      - '9237:9229'
+    networks:
+      - rafiki
+    environment:
+      NODE_ENV: development
+      INSTANCE_NAME: CAPE-TOWN
+      LOG_LEVEL: debug
+      ADMIN_PORT: 3001
+      CONNECTOR_PORT: 3002
+      OPEN_PAYMENTS_PORT: 80
+      DATABASE_URL: postgresql://cape_town_node_backend:cape_town_node_backend@shared-database/cape_town_node_backend
+      USE_TIGERBEETLE: false
+      AUTH_SERVER_GRANT_URL: ${CAPE_TOWN_NODE_AUTH_SERVER_DOMAIN:-http://cape-town-node-auth:3006}
+      AUTH_SERVER_INTROSPECTION_URL: http://cape-town-node-auth:3007
+      AUTH_SERVICE_API_URL: 'http://cape-town-node-auth:5011'
+      ILP_ADDRESS: test.cape-town-node
+      ILP_CONNECTOR_URL: http://cape-town-node-backend:3002
+      STREAM_SECRET: BjPXtnd00G2mRQwP/8ZpwyZASOch5sUXT5o0iR5b5wU=
+      SIGNATURE_SECRET: iyIgCprjb9uL8wFckR+pLEkJWMB7FJhgkvqhTQR/964= # webhook signature
+      SIGNATURE_VERSION: 1
+      ADMIN_API_SECRET: iyIgCprjb9uL8wFckR+pLEkJWMB7FJhgkvqhTQR/964=
+      WEBHOOK_URL: http://cape-town-node/webhooks
+      EXCHANGE_RATES_URL: http://cape-town-node/rates
+      OPEN_PAYMENTS_URL: ${CAPE_TOWN_NODE_OPEN_PAYMENTS_URL:-https://cape-town-node-backend}
+      REDIS_URL: redis://shared-redis:6379/6
+      WALLET_ADDRESS_URL: ${CAPE_TOWN_NODE_WALLET_ADDRESS_URL:-https://cape-town-node-backend/.well-known/pay}
+      ENABLE_TELEMETRY: true
+      ENABLE_ILP_TIMING_TELEMETRY: true
+      KEY_ID: 2bc95689-e091-48e7-b271-00e845ff538b
+      OPERATOR_TENANT_ID: f2279e57-1b7d-4634-9e25-97ac825cc942
+      DB_ENCRYPTION_SECRET: 'zO9KogehJECHReHgQr+ZWGkmgOD4AYa4ksUxALSwgM8='
+      WALLET_ADDRESS_NOT_FOUND_POLLING_ENABLED: true
+    depends_on:
+      - happy-life-backend
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:3001/healthz"]
+      start_period: 60s
+      start_interval: 5s
+      interval: 30s
+      retries: 1
+      timeout: 3s
+  cape-town-auth:
+    hostname: cape-town-node-auth
+    image: rafiki-auth
+    pull_policy: never
+    restart: always
+    volumes:
+      - type: bind
+        source: ../../packages/auth/src
+        target: /home/rafiki/packages/auth/src
+        read_only: true
+    networks:
+      - rafiki
+    ports:
+      - '5003:3003'
+      - '5006:3006'
+      - '9238:9229'
+      - '5009:3009'
+      - '5011:5011'
+    environment:
+      NODE_ENV: development
+      AUTH_DATABASE_URL: postgresql://cape_town_node_auth:cape_town_node_auth@shared-database/cape_town_node_auth
+      AUTH_SERVER_URL: ${CAPE_TOWN_NODE_AUTH_SERVER_DOMAIN:-http://localhost:5006}
+      REDIS_URL: redis://shared-redis:6379/7
+      IDENTITY_SERVER_URL: http://localhost:3032/mock-idp/
+      IDENTITY_SERVER_SECRET: 2pEcn2kkCclbOHQiGNEwhJ0rucATZhrA807HTm2rNXE=
+      COOKIE_KEY: 42397d1f371dd4b8b7d0308a689a57c882effd4ea909d792302542af47e2cd37
+      ADMIN_API_SECRET: iyIgCprjb9uL8wFckR+pLEkJWMB7FJhgkvqhTQR/964=
+      OPERATOR_TENANT_ID: f2279e57-1b7d-4634-9e25-97ac825cc942
+      SERVICE_API_PORT: 5011
+    depends_on:
+      - happy-life-auth
+  cape-town-admin:
+    hostname: cape-town-node-admin
+    image: rafiki-frontend
+    pull_policy: never
+    volumes:
+      - type: bind
+        source: ../../packages/frontend/app
+        target: /home/rafiki/packages/frontend/app
+        read_only: true
+    restart: always
+    networks:
+      - rafiki
+    ports:
+      - '5010:5010'
+    environment:
+      PORT: 5010
+      LOG_LEVEL: debug
+      NODE_ENV: development
+      GRAPHQL_URL: http://cape-town-node-backend:3001/graphql
+      OPEN_PAYMENTS_URL: https://cape-town-node-backend/
+      ENABLE_INSECURE_MESSAGE_COOKIE: true
+      AUTH_ENABLED: false
+      SIGNATURE_VERSION: 1
+    depends_on:
+      - happy-life-admin
+      - cape-town-backend
+
+volumes:
+  cape-town-mock-bank-state:

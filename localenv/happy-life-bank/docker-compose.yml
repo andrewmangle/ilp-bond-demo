@@ -43,6 +43,7 @@ services:
     ports:
       - '3031:80'
     environment:
+      MOCK_ACCOUNTS_FILE: /workspace/state/accounts.json # accounts and balances survive restarts
       LOG_LEVEL: debug
       PORT: 80
       SEED_FILE_LOCATION: /workspace/seed.yml
@@ -53,7 +54,7 @@ services:
       SIGNATURE_SECRET: iyIgCprjb9uL8wFckR+pLEkJWMB7FJhgkvqhTQR/964=
       IDP_SECRET: 2pEcn2kkCclbOHQiGNEwhJ0rucATZhrA807HTm2rNXE=
       DB_ENCRYPTION_SECRET: 'zO9KogehJECHReHgQr+ZWGkmgOD4AYa4ksUxALSwgM8='
-      DISPLAY_NAME: Happy Life Bank
+      DISPLAY_NAME: Hague Node
       DISPLAY_ICON: bank-icon.svg
       OPERATOR_TENANT_ID: cf5fd7d3-1eb1-4041-8e43-ba45747e9e5d
       FRONTEND_PORT: 4010
@@ -61,6 +62,7 @@ services:
       AUTH_SERVER_DOMAIN: http://localhost:4006
       INTERACTION_RETURN_URL: http://localhost:3031
     volumes:
+      - happy-life-mock-bank-state:/workspace/state
       - ../happy-life-bank/seed.yml:/workspace/seed.yml
       - ../happy-life-bank/private-key.pem:/workspace/private-key.pem
     depends_on:
@@ -183,3 +185,6 @@ services:
     depends_on:
       - cloud-nine-admin
       - happy-life-backend
+
+volumes:
+  happy-life-mock-bank-state:

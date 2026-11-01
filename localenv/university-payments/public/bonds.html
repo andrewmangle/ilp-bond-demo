@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bond Market · University Payments</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="rolebar" class="rolebar"></div>
+<main>
+  <h1>Bond Market</h1>
+  <p class="sub">Students issue bonds in their home currency and buy slices from any node. Interledger moves the money; ownership is recorded only once the payment has completed. Coupons and principal are paid under a grant the issuer approves at their bank.</p>
+
+  <div id="banners"></div>
+
+  <div id="not-student" hidden>
+    <section>
+      <h2>Acting as a central bank</h2>
+      <p>Pick a student in <b>Acting as</b> at the top to issue or buy bonds. You can browse the bonds below.</p>
+    </section>
+  </div>
+
+  <div id="student-view" hidden>
+    <div class="grid">
+      <section>
+        <h2>Issue a bond</h2>
+        <form id="issue-form">
+          <label for="i-name">Bond name</label>
+          <input id="i-name" required placeholder="Cape Solar Bond">
+          <label for="i-size">Total size</label>
+          <div class="row"><input id="i-size" required inputmode="decimal" placeholder="10000"><span class="cur my-cur"></span></div>
+          <label for="i-rate">Annual interest rate</label>
+          <div class="row"><input id="i-rate" required inputmode="decimal" placeholder="9"><span class="cur">%</span></div>
+          <label for="i-term">Term</label>
+          <div class="row"><input id="i-term" required inputmode="numeric" value="365"><span class="cur">days</span></div>
+          <label for="i-min">Minimum slice</label>
+          <div class="row"><input id="i-min" required inputmode="decimal" placeholder="100"><span class="cur my-cur"></span></div>
+          <label for="i-freq">Coupons</label>
+          <select id="i-freq"></select>
+          <button type="submit">Issue bond</button>
+        </form>
+        <p class="note">The bond is in your home currency and buyers pay into your account. When the first slice sells you approve a grant at your bank so coupons and principal can be paid from your account. The term starts then, on the demo clock.</p>
+        <div id="issue-msg"></div>
+      </section>
+
+      <section>
+        <h2>Buy</h2>
+        <div id="buy-panel"><p class="note">Pick <b>Buy</b> on a bond below.</p></div>
+        <div id="buy-msg"></div>
+      </section>
+    </div>
+  </div>
+
+  <section>
+    <div class="head"><h2>Bonds</h2><button class="secondary" id="refresh" type="button">Refresh</button></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Bond</th><th>Issuer</th><th>Status</th><th>Rate</th><th>Term</th><th>Next coupon</th><th class="num">Size</th><th class="num">Sold</th><th class="num">Remaining</th><th></th></tr></thead>
+        <tbody id="bonds"><tr><td colspan="10">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div id="plans-view" hidden>
+    <section>
+      <h2>Recurring purchases</h2>
+      <div class="grid">
+        <form id="plan-form">
+          <label for="p-bond">Bond</label>
+          <select id="p-bond" required></select>
+          <label for="p-amount">Amount per purchase (in the bond's currency)</label>
+          <div class="row"><input id="p-amount" required inputmode="decimal" placeholder="182"><span class="cur" id="p-cur"></span></div>
+          <label for="p-freq">Every</label>
+          <select id="p-freq"><option value="weekly">week (7 demo days)</option><option value="monthly">month (30 demo days)</option></select>
+          <label for="p-holder">Holder <span class="note">(owns the slices and receives the coupons)</span></label>
+          <select id="p-holder"></select>
+          <label for="p-count">Number of purchases <span class="note">(or leave empty and give an end day)</span></label>
+          <div class="row"><input id="p-count" inputmode="numeric" placeholder="4"><span class="cur">or</span><input id="p-end" inputmode="numeric" placeholder="end day"></div>
+          <button type="submit">Set up plan</button>
+        </form>
+        <p class="note">You approve one grant at your bank, limited per period to about one purchase in your currency plus 5% for rate changes. The first purchase is made when you approve, then one every period. A purchase is skipped, with the reason shown, if the bond is sold out, matured or in default, if you lack the funds, or if the quote is over the grant's limit because a rate moved. Skipped dates still count towards the number of purchases.</p>
+      </div>
+      <div id="plan-msg"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Bond</th><th>Holder</th><th>Each</th><th>Status</th><th>Next purchase</th><th>Made / skipped</th><th>Grant</th><th></th></tr></thead>
+          <tbody id="plans"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div id="holdings-view" hidden>
+    <section>
+      <h2>Slices you hold</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Bond</th><th>Status</th><th class="num">Face amount</th><th class="num">In <span class="my-cur"></span></th><th>Coupons received</th><th>Carried forward</th><th>Next</th><th>Paid by</th></tr></thead>
+          <tbody id="held"></tbody>
+        </table>
+      </div>
+    </section>
+    <section>
+      <h2>Bonds you issued</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Bond</th><th>Status</th><th class="num">Sold</th><th class="num">Received</th><th>Next coupon</th><th>Coupons</th><th>Grant</th><th></th></tr></thead>
+          <tbody id="issued"></tbody>
+        </table>
+      </div>
+    </section>
+    <section>
+      <h2>Bought for someone else</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Bond</th><th>Holder</th><th class="num">Face amount</th><th class="num">In <span class="my-cur"></span></th><th class="num">You paid</th><th>Coupons the holder received</th></tr></thead>
+          <tbody id="for-others"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script src="/common.js"></script>
+<script>
+  let me = null
+  let market = { frequencies: [], bonds: [] }
+  let holdings = null
+  const decimal = (a) => (Number(a.value) / 10 ** a.assetScale).toFixed(a.assetScale)
+  const isMine = (b) => me && b.issuer.node === me.node && b.issuer.id === me.id
+  const empty = (cols, text) => `<tr><td colspan="${cols}" class="note">${text}</td></tr>`
+  const tag = (key, label) => `<span class="tag ${esc(key)}">${esc(label)}</span>`
+  const statusTag = (b) => tag(b.lifecycle, b.lifecycleLabel)
+  const nextText = (n) => n ? `Day ${n.day} <span class="note">${n.kind === 'maturity' ? 'maturity' : n.kind === 'retry' ? 'principal retry' : 'coupon'}${n.paused ? ', clock paused' : `, in ${n.inSeconds} s`}</span>` : '—'
+  const list = (amounts) => amounts.length ? amounts.map(fmt).join(', ') : '—'
+
+  async function loadBonds() {
+    market = await api('GET', '/api/bonds')
+    if (!$('i-freq').options.length) {
+      $('i-freq').innerHTML = market.frequencies.map((f) => `<option value="${f.key}">${esc(f.label)}</option>`).join('')
+    }
+    $('bonds').innerHTML = market.bonds.map((b) => `
+      <tr>
+        <td><b>${esc(b.name)}</b><span class="note">${esc(b.currency)} · min slice ${fmt(b.minSlice)} · coupons ${esc(b.couponFrequencyLabel)}</span></td>
+        <td>${esc(b.issuer.name)}<span class="note">${esc(b.issuer.nodeLabel)}</span></td>
+        <td>${statusTag(b)}${b.couponsMissed ? `<span class="note">${b.couponsMissed} missed</span>` : ''}</td>
+        <td>${b.annualRate}%</td>
+        <td>${b.termDays} days<span class="note">${b.maturityDay ? `matures day ${b.maturityDay}` : 'starts when the grant is approved'}</span></td>
+        <td>${nextText(b.nextCoupon)}</td>
+        <td class="num">${fmt(b.size)}</td>
+        <td class="num">${fmt(b.sold)}</td>
+        <td class="num">${b.status === 'closed' ? '—' : fmt(b.remaining)}${b.reserved.value !== '0' ? `<span class="note">${fmt(b.reserved)} being bought</span>` : ''}</td>
+        <td>${me && !isMine(b) && b.status === 'open' && b.remaining.value !== '0' ? `<button class="small" type="button" data-buy="${b.id}">Buy</button>` : ''}</td>
+      </tr>`).join('') || empty(10, 'No bonds yet.')
+    $('bonds').querySelectorAll('[data-buy]').forEach((btn) => btn.addEventListener('click', () => showBuy(btn.dataset.buy)))
+  }
+
+  function showBuy(bondId) {
+    const b = market.bonds.find((x) => x.id === bondId)
+    message($('buy-msg'))
+    const holders = roleState.directory.filter((a) => !(a.node === me.node && a.id === me.id) && !(a.node === b.issuer.node && a.id === b.issuer.id))
+    $('buy-panel').innerHTML = `
+      <dl class="facts">
+        <dt>Bond</dt><dd>${esc(b.name)} ${statusTag(b)}</dd>
+        <dt>Issuer</dt><dd>${esc(b.issuer.name)} · ${esc(b.issuer.nodeLabel)}</dd>
+        <dt>Terms</dt><dd>${b.annualRate}% a year for ${b.termDays} days, coupons ${esc(b.couponFrequencyLabel)}</dd>
+        <dt>Remaining</dt><dd>${fmt(b.remaining)}</dd>
+      </dl>
+      <form id="buy-form">
+        <label for="b-amount">Amount (in ${esc(b.currency)}, the bond's currency)</label>
+        <div class="row"><input id="b-amount" required inputmode="decimal" placeholder="${decimal(b.minSlice)}"><span class="cur">${esc(b.currency)}</span></div>
+        <label for="b-holder">Holder <span class="note">(owns the slice and receives the coupons)</span></label>
+        <select id="b-holder">
+          <option value="">Myself (${esc(me.name)})</option>
+          <optgroup label="Someone else, e.g. family savings">
+            ${holders.map((a) => `<option value="${a.node}|${a.id}">${esc(a.name)} · ${esc(a.nodeLabel)}</option>`).join('')}
+          </optgroup>
+        </select>
+        <button type="submit">Get quote</button>
+        <button type="button" class="secondary" id="buy-close">Close</button>
+      </form>
+      <div id="buy-quote"></div>`
+    $('buy-close').onclick = () => { $('buy-panel').innerHTML = '<p class="note">Pick <b>Buy</b> on a bond below.</p>' }
+    $('buy-form').addEventListener('submit', (e) => quoteBuy(e, b))
+  }
+
+  async function quoteBuy(e, b) {
+    e.preventDefault()
+    const button = e.target.querySelector('button[type=submit]')
+    const [holderNode, holderId] = ($('b-holder').value || '|').split('|')
+    busy(button, true, 'Quoting…'); message($('buy-msg')); $('buy-quote').innerHTML = ''
+    try {
+      const q = await api('POST', `/api/bonds/${b.id}/quote`, { amount: $('b-amount').value, holderNode: holderNode || undefined, holderId: holderId || undefined })
+      $('buy-quote').innerHTML = `
+        <div class="quote">
+          <dl class="facts">
+            <dt>You pay</dt><dd>at most ${fmt(q.debitAmount)} <span class="note">(includes 1% headroom for rate movement; you're charged what is actually sent)</span></dd>
+            <dt>Issuer receives</dt><dd>${fmt(q.receiveAmount)}</dd>
+            ${q.rate ? `<dt>Rate</dt><dd>${esc(q.rate)}</dd>` : ''}
+            <dt>Holder</dt><dd>${esc(q.holder.name)} · ${esc(q.holder.nodeLabel)}</dd>
+            <dt>Coupons</dt><dd>≈ ${fmt(q.coupons.perCoupon)} ${esc(q.coupons.frequency)}, ${q.coupons.coupons} coupons, ${fmt(q.coupons.totalInterest)} interest in all, paid in the holder's currency</dd>
+            <dt>Quote valid until</dt><dd>${new Date(q.expiresAt).toLocaleTimeString()}</dd>
+          </dl>
+          <p class="note">The slice is recorded for ${esc(q.holder.name)} only once your payment has completed.</p>
+          <button id="buy-confirm" type="button">Confirm and pay</button>
+          <button id="buy-cancel" class="secondary" type="button">Cancel</button>
+        </div>`
+      $('buy-cancel').onclick = () => { $('buy-quote').innerHTML = '' }
+      $('buy-confirm').onclick = () => confirmBuy(q)
+      await loadBonds()
+    } catch (err) {
+      message($('buy-msg'), esc(err.message))
+    } finally { busy(button, false) }
+  }
+
+  async function confirmBuy(q) {
+    $('buy-confirm').disabled = $('buy-cancel').disabled = true
+    $('buy-confirm').textContent = 'Paying…'
+    message($('buy-msg'), 'Paying the issuer through Rafiki…', 'info')
+    try {
+      const p = await api('POST', '/api/bonds/buy', { quoteId: q.quoteId })
+      $('buy-quote').innerHTML = ''
+      if (p.state === 'COMPLETED' && p.outcome?.recorded) {
+        message($('buy-msg'), `Bought ${fmt(q.receiveAmount)} of ${esc(q.bond.name)} for ${esc(q.holder.name)}. You paid ${fmt(p.sent)}; ${esc(q.bond.issuer.name)} received ${fmt(p.received)}.`, 'ok')
+      } else if (p.state === 'SENDING') {
+        message($('buy-msg'), `Rafiki is still sending this payment${p.retrying ? ' (retrying)' : ''}. The slice is recorded only if it completes; nothing is recorded if it fails.`, 'info')
+      } else {
+        message($('buy-msg'), `Payment ${esc(p.state.toLowerCase())}: ${esc(p.error || p.outcome?.reason || 'unknown reason')}. No slice was recorded.`)
+      }
+      await reload()
+    } catch (err) {
+      $('buy-quote').innerHTML = ''
+      message($('buy-msg'), `${esc(err.message)} No slice was recorded.`)
+      await reload()
+    }
+  }
+
+  function grantText(b) {
+    const g = b.grant
+    if (!g) return b.lifecycle === 'awaiting_grant' ? 'not approved yet' : '—'
+    const one = (x, label, limitText) => x
+      ? `${label}: ${esc(x.state)}${x.state === 'approved' || x.state === 'revoked' ? `, used ${fmt(x.used)} of ${fmt(x.planned)}` : ''}<span class="note">${limitText}${x.error ? ` · ${esc(x.error)}` : ''}</span>`
+      : `${label}: not approved yet`
+    const coupons = one(g.coupons, g.principal === null && g.coupons ? 'Grant (coupons and principal)' : 'Coupons grant',
+      g.coupons ? `Rafiki limit ${fmt(g.coupons.limit)} per coupon period` : '')
+    const principal = g.principal === null && g.coupons ? '' : '<br>' + one(g.principal, 'Principal grant', g.principal ? `one-off limit ${fmt(g.principal.limit)}` : '')
+    return `${coupons}${principal}<br><b>${fmt(g.used)} of ${fmt(g.planned)} used, ${fmt(g.remaining)} left</b>`
+  }
+
+  function historyRows(b) {
+    if (!b.history?.length) return ''
+    return `<details><summary>Coupon dates</summary><table>${b.history.map((e) => `
+      <tr><td>Day ${e.day}</td><td>${tag(e.kind === 'coupon' ? 'coupon' : 'principal', e.kind)}</td><td>${tag(e.status, e.status)}</td>
+        <td>${e.lines.map((l) => `${esc(l.holder)}${l.part === 'principal' ? ' (principal)' : ''}: ${l.status === 'paid' ? fmt(l.received) : esc(l.status)}${l.error && l.status !== 'paid' ? ` <span class="note">${esc(l.error)}</span>` : ''}`).join('<br>')}</td></tr>`).join('')}</table></details>`
+  }
+
+  async function approveGrant(bondId, button) {
+    busy(button, true, 'Opening your bank…')
+    try {
+      const g = await api('POST', `/api/bonds/${bondId}/grant`)
+      window.location.assign(g.redirect) // the issuer's bank consent screen; it sends the browser back here
+    } catch (err) {
+      busy(button, false)
+      message($('banners'), esc(err.message))
+    }
+  }
+
+  function renderBanners() {
+    const params = new URLSearchParams(window.location.search)
+    const out = []
+    const result = params.get('grant')
+    if (result === 'approved') out.push('<div class="banner ok">Grant approved. The bond is Active: coupons are now paid from your account on each coupon date.</div>')
+    if (result === 'rejected') out.push('<div class="banner err">The grant was not approved, so no coupons can be paid yet. You can approve it again below.</div>')
+    if (result === 'failed') out.push('<div class="banner err">The grant could not be completed. Try approving it again.</div>')
+    const plan = params.get('plan')
+    if (plan === 'approved') out.push('<div class="banner ok">Recurring purchase approved. The first purchase is being made now, then one every period.</div>')
+    if (plan === 'rejected' || plan === 'failed') out.push('<div class="banner err">The recurring purchase grant was not approved. You can try again below.</div>')
+    if (result === 'upgraded') out.push('<div class="banner ok">The bond now has its two grants (coupons and principal). Its term carries on as before.</div>')
+    if (result === 'principal') out.push('<div class="banner warn">The coupons grant is approved. Now approve the principal grant below.</div>')
+    if (demoClock?.paused) out.push('<div class="banner warn">The demo clock is paused, so no coupons or principal are being paid. A central bank can resume it on the Central Bank page.</div>')
+    for (const b of holdings?.issued ?? []) {
+      if (b.lifecycle === 'awaiting_grant' && b.grant?.state !== 'pending') {
+        const t = b.grantTerms
+        const step = b.grant?.state === 'partial' ? 'principal' : 'coupons'
+        out.push(`<div class="banner warn"><b>${esc(b.name)}</b> has sold its first slice. Approve two grants at your bank so it can pay its holders from your account: <b>coupons</b>, up to ${fmt(t?.coupons.limit)} per coupon period, and <b>principal</b>, up to ${fmt(t?.principal.limit)} once, at maturity. Your bank's consent screen opens for each in turn.<br><button type="button" data-grant="${b.id}">${step === 'principal' ? 'Approve principal grant' : 'Approve grants'}</button></div>`)
+      }
+      if (b.lifecycle === 'active' && b.grant?.legacy) {
+        out.push(`<div class="banner warn"><b>${esc(b.name)}</b> is on a single grant from before coupons and principal had their own. Its repetitions may have run out, so coupons can fail. Re-approve it as two grants; the term carries on.<br><button type="button" data-grant="${b.id}">Re-approve grants</button></div>`)
+      }
+      if (b.lifecycle === 'in_default') out.push(`<div class="banner err"><b>${esc(b.name)}</b> is In Default after ${b.missedInRow} missed coupons. Payments have stopped.</div>`)
+    }
+    const defaulted = new Map()
+    for (const h of holdings?.held ?? []) if (h.bond.lifecycle === 'in_default') defaulted.set(h.bond.id, h.bond)
+    for (const bond of defaulted.values()) out.push(`<div class="banner err"><b>${esc(bond.name)}</b> by ${esc(bond.issuerName)} is <b>In Default</b>: ${bond.couponsMissed} coupons were missed and payments have stopped.</div>`)
+    $('banners').innerHTML = out.join('')
+    $('banners').querySelectorAll('[data-grant]').forEach((btn) => btn.addEventListener('click', () => approveGrant(btn.dataset.grant, btn)))
+  }
+
+  async function loadHoldings() {
+    holdings = await api('GET', '/api/holdings')
+    const h = holdings
+    $('held').innerHTML = h.held.map((x) => `
+      <tr>
+        <td><b>${esc(x.bond.name)}</b><span class="note">${esc(x.bond.issuerName)} · ${esc(x.bond.issuerNodeLabel)} · ${x.bond.annualRate}%</span></td>
+        <td>${tag(x.bond.lifecycle, x.bond.lifecycleLabel)}${x.bond.couponsMissed ? `<span class="note">${x.bond.couponsMissed} missed</span>` : ''}</td>
+        <td class="num">${fmt(x.amount)}</td>
+        <td class="num">≈ ${fmt(x.amountInOwnCurrency)}</td>
+        <td>${list(x.coupons.received)}<span class="note">${x.coupons.paymentsReceived} payments${x.coupons.principalRepaid ? ' · principal repaid' : ''}</span></td>
+        <td>${x.coupons.carried.value !== '0' ? fmt(x.coupons.carried) : '—'}</td>
+        <td>${x.bond.lifecycle === 'active' ? nextText(x.bond.nextCoupon) : x.bond.maturityDay ? `matured day ${x.bond.maturityDay}` : '—'}</td>
+        <td>${x.buyer.node === me.node && x.buyer.name === me.name ? 'you' : `${esc(x.buyer.name)}<span class="note">${esc(x.buyer.nodeLabel)}</span>`}</td>
+      </tr>`).join('') || empty(8, 'No slices yet.')
+    $('issued').innerHTML = h.issued.map((b) => `
+      <tr>
+        <td><b>${esc(b.name)}</b><span class="note">${fmt(b.size)} at ${b.annualRate}%, ${b.termDays} days, ${esc(b.couponFrequencyLabel)}</span>${historyRows(b)}</td>
+        <td>${statusTag(b)}</td>
+        <td class="num">${fmt(b.sold)}<span class="note">${b.holders} holders</span></td>
+        <td class="num">${fmt(b.raised)}</td>
+        <td>${nextText(b.nextCoupon)}</td>
+        <td>${b.couponsPaid} paid · ${b.couponsMissed} missed<span class="note">${b.couponsDone} of ${b.couponDates} dates</span></td>
+        <td>${grantText(b)}</td>
+        <td>${b.lifecycle === 'awaiting_grant' && b.grant?.state !== 'pending' ? `<button class="small" type="button" data-grant="${b.id}">${b.grant?.state === 'partial' ? 'Approve principal grant' : 'Approve grants'}</button>` : b.grant?.state === 'pending' ? `<a href="${esc(b.grant.redirect)}">Continue at your bank</a>` : b.lifecycle === 'active' && b.grant?.legacy ? `<button class="small" type="button" data-grant="${b.id}">Re-approve grants</button>` : ''}</td>
+      </tr>`).join('') || empty(8, 'You haven’t issued a bond.')
+    $('issued').querySelectorAll('[data-grant]').forEach((btn) => btn.addEventListener('click', () => approveGrant(btn.dataset.grant, btn)))
+    $('for-others').innerHTML = h.paidForOthers.map((x) => `
+      <tr>
+        <td><b>${esc(x.bond.name)}</b><span class="note">${esc(x.bond.issuerName)}</span></td>
+        <td>${esc(x.holder.name)}<span class="note">${esc(x.holder.nodeLabel)}</span></td>
+        <td class="num">${fmt(x.amount)}</td><td class="num">≈ ${fmt(x.amountInOwnCurrency)}</td>
+        <td class="num">${fmt(x.paid)}</td><td>${list(x.coupons.received)}</td>
+      </tr>`).join('') || empty(6, 'Nothing bought for others.')
+    renderBanners()
+  }
+
+  // --- Recurring purchases ---
+  function renderPlanForm() {
+    const open = market.bonds.filter((b) => b.status === 'open' && !isMine(b) && !['matured', 'in_default'].includes(b.lifecycle))
+    const prev = $('p-bond').value
+    $('p-bond').innerHTML = open.map((b) => `<option value="${b.id}">${esc(b.name)} · ${esc(b.issuer.name)} (${esc(b.currency)}, ${fmt(b.remaining)} left)</option>`).join('')
+    if (open.some((b) => b.id === prev)) $('p-bond').value = prev
+    const bond = open.find((b) => b.id === $('p-bond').value)
+    $('p-cur').textContent = bond?.currency ?? ''
+    const prevHolder = $('p-holder').value
+    const holders = roleState.directory.filter((a) => !(a.node === me.node && a.id === me.id) && !(bond && a.node === bond.issuer.node && a.id === bond.issuer.id))
+    $('p-holder').innerHTML = `<option value="">Myself (${esc(me.name)})</option><optgroup label="Someone else, e.g. family savings">${holders.map((a) => `<option value="${a.node}|${a.id}">${esc(a.name)} · ${esc(a.nodeLabel)}</option>`).join('')}</optgroup>`
+    if ([...$('p-holder').options].some((o) => o.value === prevHolder)) $('p-holder').value = prevHolder
+  }
+
+  async function loadPlans() {
+    const list = await api('GET', '/api/plans')
+    $('plans').innerHTML = list.map((p) => {
+      const g = p.grant
+      const actions = p.state === 'awaiting_grant'
+        ? (g?.state === 'pending' ? `<a href="${esc(g.redirect)}">Continue at your bank</a>` : `<button class="small" type="button" data-plan-grant="${p.id}">Approve at my bank</button>`)
+        : p.state === 'active' ? `<button class="small secondary" type="button" data-plan="${p.id}" data-action="pause">Pause</button> <button class="small secondary" type="button" data-plan="${p.id}" data-action="cancel">Cancel</button>`
+        : p.state === 'paused' ? `<button class="small" type="button" data-plan="${p.id}" data-action="resume">Resume</button> <button class="small secondary" type="button" data-plan="${p.id}" data-action="cancel">Cancel</button>`
+        : ''
+      const runs = p.runs.length ? `<details><summary>Purchases</summary><table>${p.runs.map((r) => `<tr><td>${r.idx}</td><td>Day ${r.day}</td><td>${tag(r.status === 'bought' ? 'paid' : r.status === 'skipped' ? 'missed' : 'carried', r.status)}</td><td>${r.status === 'bought' ? `paid ${fmt(r.debit)}` : esc(r.reason ?? '')}</td></tr>`).join('')}</table></details>` : ''
+      return `
+      <tr>
+        <td><b>${esc(p.bond.name)}</b><span class="note">${esc(p.bond.issuerName)} · ${esc(p.bond.issuerNodeLabel)}</span>${runs}</td>
+        <td>${esc(p.holder.name)}<span class="note">${esc(p.holder.nodeLabel)}</span></td>
+        <td>${fmt(p.amount)}<span class="note">${esc(p.frequencyLabel)}, ends ${esc(p.ends)}; ≈ ${fmt(p.estimate)} each</span></td>
+        <td>${tag(p.state === 'active' ? 'active' : p.state === 'paused' ? 'awaiting_grant' : p.state === 'awaiting_grant' ? 'awaiting_grant' : 'closed', p.stateLabel)}${p.flag ? `<span class="note" style="color:var(--err)">⚠ ${esc(p.flag)}</span>` : ''}</td>
+        <td>${p.nextPurchase ? `Day ${p.nextPurchase.day}<span class="note">${p.nextPurchase.paused ? 'clock paused' : `in ${p.nextPurchase.inSeconds} s`}</span>` : '—'}</td>
+        <td>${p.bought} made · ${p.skipped} skipped</td>
+        <td>${g ? `${esc(g.state)}: limit ${fmt(g.limit)} per ${p.frequency === 'weekly' ? 'week' : 'month'}<span class="note">${fmt(g.remainingThisPeriod)} left this period · ${fmt(p.spent)} spent in all</span>` : 'not approved yet'}</td>
+        <td>${actions}</td>
+      </tr>`
+    }).join('') || empty(8, 'No recurring purchases.')
+    $('plans').querySelectorAll('[data-plan-grant]').forEach((btn) => btn.addEventListener('click', async () => {
+      busy(btn, true, 'Opening your bank…')
+      try { window.location.assign((await api('POST', `/api/plans/${btn.dataset.planGrant}/grant`)).redirect) } catch (err) { busy(btn, false); message($('plan-msg'), esc(err.message)) }
+    }))
+    $('plans').querySelectorAll('[data-plan]').forEach((btn) => btn.addEventListener('click', async () => {
+      busy(btn, true, '…')
+      try {
+        const p = await api('POST', `/api/plans/${btn.dataset.plan}/${btn.dataset.action}`)
+        message($('plan-msg'), `Plan ${esc(p.stateLabel.toLowerCase())}.${btn.dataset.action === 'cancel' ? ' The grant has been revoked.' : ''}`, 'ok')
+      } catch (err) { message($('plan-msg'), esc(err.message)) }
+      await reload()
+    }))
+  }
+
+  $('p-bond').addEventListener('change', renderPlanForm)
+  $('plan-form').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const button = e.target.querySelector('button[type=submit]')
+    const [holderNode, holderId] = ($('p-holder').value || '|').split('|')
+    busy(button, true, 'Setting up…'); message($('plan-msg'))
+    try {
+      const p = await api('POST', '/api/plans', {
+        bondId: $('p-bond').value, amount: $('p-amount').value, frequency: $('p-freq').value,
+        holderNode: holderNode || undefined, holderId: holderId || undefined, purchases: $('p-count').value, endDay: $('p-end').value
+      })
+      message($('plan-msg'), `Plan set up: ${fmt(p.amount)} of ${esc(p.bond.name)} ${esc(p.frequencyLabel)} for ${esc(p.holder.name)}, about ${fmt(p.estimate)} each. Approve it at your bank to start.`, 'ok')
+      await reload()
+    } catch (err) { message($('plan-msg'), esc(err.message)) } finally { busy(button, false) }
+  })
+
+  async function reload() {
+    await Promise.all([
+      loadBonds().catch((err) => { $('bonds').innerHTML = empty(10, esc(err.message)) }),
+      me ? loadHoldings().catch((err) => { $('held').innerHTML = empty(8, esc(err.message)) }) : null,
+      me ? loadPlans().catch((err) => { $('plans').innerHTML = empty(8, esc(err.message)) }) : null
+    ])
+    if (me) renderPlanForm()
+  }
+
+  async function render(role) {
+    $('not-student').hidden = role.kind === 'student'
+    $('student-view').hidden = $('holdings-view').hidden = $('plans-view').hidden = role.kind !== 'student'
+    $('buy-panel').innerHTML = '<p class="note">Pick <b>Buy</b> on a bond below.</p>'
+    for (const id of ['issue-msg', 'buy-msg']) message($(id))
+    me = null; holdings = null
+    if (role.kind === 'student') {
+      me = await api('GET', '/api/me').catch(() => null)
+      document.querySelectorAll('.my-cur').forEach((el) => { el.textContent = me?.assetCode ?? '' })
+    }
+    await reload()
+    if (!me) $('banners').innerHTML = ''
+  }
+
+  $('issue-form').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const button = e.target.querySelector('button[type=submit]')
+    busy(button, true, 'Issuing…'); message($('issue-msg'))
+    try {
+      const b = await api('POST', '/api/bonds', {
+        name: $('i-name').value, size: $('i-size').value, annualRate: $('i-rate').value,
+        termDays: Number($('i-term').value), minSlice: $('i-min').value, couponFrequency: $('i-freq').value
+      })
+      message($('issue-msg'), `Issued <b>${esc(b.name)}</b>: ${fmt(b.size)} at ${b.annualRate}% for ${b.termDays} days. It starts once the first slice sells and you approve the coupon grant.`, 'ok')
+      e.target.reset(); $('i-term').value = '365'
+      await reload()
+    } catch (err) {
+      message($('issue-msg'), esc(err.message))
+    } finally { busy(button, false) }
+  })
+  $('refresh').addEventListener('click', () => reload())
+  // Coupons happen on their own: keep the page current
+  setInterval(() => { if (!$('buy-quote') || !$('buy-quote').innerHTML) reload() }, 5000)
+
+  initRoles('bonds', render)
+</script>
+</body>
+</html>

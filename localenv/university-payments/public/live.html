@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live · University Payments</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  .map { background: #0f1b33; border-radius: 12px; padding: 8px; margin-bottom: 16px; }
+  .map svg { width: 100%; height: auto; display: block; }
+  .map .land { fill: #1b2b4d; }
+  .map .route { stroke: #33476f; stroke-width: 2; stroke-dasharray: 4 6; fill: none; }
+  .map .route.flash { stroke: #ffd27a; stroke-width: 4; stroke-dasharray: none; transition: stroke 0.2s; }
+  .map .node circle { fill: #2f5bd3; stroke: #fff; stroke-width: 3; transition: r 0.2s; }
+  .map .node.flash circle { fill: #ffd27a; }
+  .map .node text { fill: #fff; font: 600 15px system-ui, sans-serif; text-anchor: middle; }
+  .map .node .cur { fill: #c9d3ea; font-weight: 400; font-size: 13px; }
+  .map .coin { fill: #ffd27a; }
+  #feed tr.new td { animation: arrive 2.5s ease-out; }
+  @keyframes arrive { from { background: #fff1c2; } to { background: transparent; } }
+  .arrow { color: var(--muted); padding: 0 4px; }
+  .live-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); margin-right: 6px; }
+  .live-dot.on { background: #1f9d55; box-shadow: 0 0 0 3px #c9f0da; }
+</style>
+</head>
+<body>
+<div id="rolebar" class="rolebar"></div>
+<main>
+  <div class="head"><h1>Live</h1><span class="note"><span class="live-dot" id="live-dot"></span><span id="live-status">Connecting…</span></span></div>
+  <p class="sub">Every payment across the three nodes as it happens: funding, transfers, bond buys, recurring buys, coupons and principal.</p>
+
+  <div class="map">
+    <svg viewBox="0 0 800 300" role="img" aria-label="The three university nodes and money moving between them">
+      <!-- stylised continents: the Americas, Europe, Africa -->
+      <path class="land" d="M70 40 q60 -20 120 10 q30 30 10 70 q-20 30 -10 60 q15 40 -20 80 q-30 20 -40 -20 q-10 -40 -40 -60 q-40 -30 -40 -80 q0 -40 20 -60z"/>
+      <path class="land" d="M410 30 q50 -15 100 5 q20 20 -5 40 q-30 15 -60 10 q-40 -5 -45 -30z"/>
+      <path class="land" d="M440 100 q60 -15 110 10 q20 40 0 80 q-20 50 -50 90 q-25 10 -35 -30 q-10 -40 -35 -70 q-15 -40 10 -80z"/>
+      <g id="routes"></g>
+      <g id="coins"></g>
+      <g id="nodes"></g>
+    </svg>
+  </div>
+
+  <section>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>Type</th><th>From</th><th></th><th>To</th><th class="num">Sent</th><th class="num">Received</th><th>State</th></tr></thead>
+        <tbody id="feed"><tr><td colspan="8">Waiting for payments…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script src="/common.js"></script>
+<script>
+  const POS = { hbcu: { x: 140, y: 150, label: 'HBCU', cur: 'USD' }, hague: { x: 460, y: 70, label: 'Hague', cur: 'EUR' }, capetown: { x: 505, y: 215, label: 'Cape Town', cur: 'ZAR' } }
+  const PAIRS = [['hbcu', 'hague'], ['hbcu', 'capetown'], ['hague', 'capetown']]
+  const NS = 'http://www.w3.org/2000/svg'
+  const el = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e }
+  const routeId = (a, b) => `route-${[a, b].sort().join('-')}`
+
+  for (const [a, b] of PAIRS) {
+    const p = POS[a], q = POS[b]
+    const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2 - 40
+    $('routes').appendChild(el('path', { id: routeId(a, b), class: 'route', d: `M${p.x} ${p.y} Q${mx} ${my} ${q.x} ${q.y}` }))
+  }
+  for (const [key, p] of Object.entries(POS)) {
+    const g = el('g', { class: 'node', id: `node-${key}` })
+    g.appendChild(el('circle', { cx: p.x, cy: p.y, r: 16 }))
+    const t = el('text', { x: p.x, y: p.y + 38 }); t.textContent = p.label; g.appendChild(t)
+    const c = el('text', { x: p.x, y: p.y + 55, class: 'cur' }); c.textContent = p.cur; g.appendChild(c)
+    $('nodes').appendChild(g)
+  }
+
+  // A coin travels along the route from the sender's node to the receiver's; within one node, the node pulses
+  function flash(from, to) {
+    if (from === to) {
+      const n = $(`node-${from}`); n.classList.add('flash'); n.querySelector('circle').setAttribute('r', 24)
+      setTimeout(() => { n.classList.remove('flash'); n.querySelector('circle').setAttribute('r', 16) }, 900)
+      return
+    }
+    const route = $(routeId(from, to)); route.classList.add('flash')
+    setTimeout(() => route.classList.remove('flash'), 1400)
+    const length = route.getTotalLength ? route.getTotalLength() : 0
+    const forward = [from, to].sort()[0] === from
+    const coin = el('circle', { r: 7, class: 'coin' }); $('coins').appendChild(coin)
+    const t0 = performance.now()
+    const step = (t) => {
+      const f = Math.min(1, (t - t0) / 1200)
+      if (length) {
+        const pt = route.getPointAtLength((forward ? f : 1 - f) * length)
+        coin.setAttribute('cx', pt.x); coin.setAttribute('cy', pt.y)
+      } else {
+        const p = POS[from], q = POS[to]
+        coin.setAttribute('cx', p.x + (q.x - p.x) * f); coin.setAttribute('cy', p.y + (q.y - p.y) * f)
+      }
+      if (f < 1) requestAnimationFrame(step); else { coin.remove(); $(`node-${to}`).classList.add('flash'); setTimeout(() => $(`node-${to}`).classList.remove('flash'), 600) }
+    }
+    requestAnimationFrame(step)
+  }
+
+  const TAGS = { mint: 'mint', funding: 'funding', transfer: 'payment', 'bond buy': 'bond', 'recurring buy': 'bond', coupon: 'coupon', principal: 'principal' }
+  let items = []
+  function row(i, isNew) {
+    const state = i.state === 'COMPLETED' ? 'completed' : i.state === 'FAILED' || i.state === 'CANCELLED' ? `<span class="tag failed" title="${esc(i.error)}">${esc(i.state.toLowerCase())}</span>` : esc(i.state.toLowerCase())
+    return `<tr data-id="${esc(i.id)}"${isNew ? ' class="new"' : ''}>
+      <td>${fmtTime(i.at)}</td>
+      <td><span class="tag ${TAGS[i.type] ?? 'payment'}">${esc(i.type)}</span></td>
+      <td>${esc(i.from.name)}<span class="note">${esc(i.from.nodeLabel)}</span></td>
+      <td class="arrow">→</td>
+      <td>${esc(i.to.name)}<span class="note">${esc(i.to.nodeLabel)}</span></td>
+      <td class="num">${fmt(i.sent)}</td>
+      <td class="num">${i.received ? `${i.estimated ? '≈ ' : ''}${fmt(i.received)}` : '—'}</td>
+      <td>${state}</td>
+    </tr>`
+  }
+  function render(newIds = new Set()) {
+    items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
+    items = items.slice(0, 80)
+    $('feed').innerHTML = items.map((i) => row(i, newIds.has(i.id))).join('') || '<tr><td colspan="8" class="note">No payments yet. They appear here as they happen.</td></tr>'
+  }
+
+  function connect() {
+    const source = new EventSource('/api/live/stream')
+    source.addEventListener('open', () => { $('live-dot').classList.add('on'); $('live-status').textContent = 'Live' })
+    source.addEventListener('error', () => { $('live-dot').classList.remove('on'); $('live-status').textContent = 'Reconnecting…' })
+    source.addEventListener('snapshot', (e) => { items = JSON.parse(e.data); render() })
+    source.addEventListener('payment', (e) => {
+      const { item, isNew } = JSON.parse(e.data)
+      items = [item, ...items.filter((i) => i.id !== item.id)]
+      render(isNew ? new Set([item.id]) : new Set())
+      if (isNew) flash(item.from.node, item.to.node)
+    })
+  }
+
+  initRoles('live', () => {})
+  connect()
+</script>
+</body>
+</html>

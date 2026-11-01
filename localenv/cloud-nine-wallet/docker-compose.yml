@@ -42,6 +42,7 @@ services:
     ports:
       - '3030:80'
     environment:
+      MOCK_ACCOUNTS_FILE: /workspace/state/accounts.json # accounts and balances survive restarts
       LOG_LEVEL: debug
       PORT: 80
       SEED_FILE_LOCATION: /workspace/seed.yml
@@ -53,11 +54,12 @@ services:
       SIGNATURE_VERSION: 1
       SIGNATURE_SECRET: iyIgCprjb9uL8wFckR+pLEkJWMB7FJhgkvqhTQR/964=
       IDP_SECRET: 2pEcn2kkCclbOHQiGNEwhJ0rucATZhrA807HTm2rNXE=
-      DISPLAY_NAME: Cloud Nine Wallet
+      DISPLAY_NAME: HBCU Node
       DISPLAY_ICON: wallet-icon.svg
       OPERATOR_TENANT_ID: 438fa74a-fa7d-4317-9ced-dde32ece1787
       FRONTEND_PORT: 3010
     volumes:
+      - cloud-nine-mock-bank-state:/workspace/state
       - ../cloud-nine-wallet/seed.yml:/workspace/seed.yml
       - ../cloud-nine-wallet/private-key.pem:/workspace/private-key.pem
     depends_on:
@@ -218,4 +220,5 @@ services:
       - cloud-nine-backend
 
 volumes:
+  cloud-nine-mock-bank-state:
   database-data: # named volumes can be managed easier using docker-compose
