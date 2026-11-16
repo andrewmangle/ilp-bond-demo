@@ -38,7 +38,14 @@ Also seen, not filed:
   when storing group assignment during SyncGroup`, `__consumer_offsets` partition 38). Payment-created webhooks
   stopped, so payments stayed `CREATED`. Restarting `kafka-b` stopped the coordinator errors, but Node B
   still didn't settle payments (new ones timed out, even after restarting all of Node B's services), so
-  we wiped the stack (`down --volumes`). Not reproduced yet.
+  we wiped the stack (`down --volumes`).
+- **Three nodes overload a 16-core, 24 GB laptop (WSL2).** After the wipe, three nodes passed every smoke test
+  leg. About 11 hours later, with nothing else heavy running, the load average was 91 and rising (187 a few
+  minutes later), `docker stats` didn't answer, and Node A's Kafka showed the same coordinator failure as
+  Node B before (107 errors in 2 minutes); Rhyza had processed nothing since. Stopping Rhyza brought the
+  load to 9. So the Kafka failure above is most likely resource starvation rather than a Rhyza bug. Each
+  node runs its own Kafka, MongoDB and Redis plus about 19 services (about 2.3 GiB per node; 69 containers
+  for three). Our demos now run two nodes.
 - Grant spend limits are not enforced yet (known: #278).
 - The OpenAPI `Payment` and `PaymentIntent` schemas have no `metadata`, but the API returns it. The Admin API
   has no health endpoint. When a remote quote fails, `payments-api-service` logs `Unknown response event:
