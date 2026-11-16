@@ -9,10 +9,10 @@ Found against commit `259a9b94fb8feb14882997ed69cc188f905ad68b` (also `main` on 
 | 2 | Already filed as [#424](https://github.com/interledger/rhyza/issues/424); we added a [repro comment](https://github.com/interledger/rhyza/issues/424#issuecomment-6905653965) with the workaround |
 | 3 | Filed as [#465](https://github.com/interledger/rhyza/issues/465) |
 | 4 | Filed as [#466](https://github.com/interledger/rhyza/issues/466) |
-| 5 | Phase 4, **not filed yet** (needs Andrew's OK) |
-| 6 | Phase 4, **not filed yet** |
-| 7 | Phase 4, **not filed yet** |
-| 4b | Phase 4, comment for #466, **not posted yet** |
+| 5 | Filed as [#467](https://github.com/interledger/rhyza/issues/467) |
+| 6 | Filed as [#468](https://github.com/interledger/rhyza/issues/468) |
+| 7 | Filed as [#469](https://github.com/interledger/rhyza/issues/469) |
+| 4b | Posted as a [comment on #466](https://github.com/interledger/rhyza/issues/466#issuecomment-6906352226) |
 
 The texts below are the drafts they came from.
 

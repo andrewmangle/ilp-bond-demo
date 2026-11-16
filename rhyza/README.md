@@ -172,7 +172,7 @@ What works:
   (`GET /grant/{id}`, `POST /interaction/{id}/accept`, header `x-idp-secret: idp-secret`) shows the grant's
   access and limits and records the decision.
 
-What doesn't (each seen at least twice; texts in `UPSTREAM_ISSUES.md` 5 to 7, not filed yet):
+What doesn't (each seen at least twice; filed as #467, #468 and #469):
 - **Finish always answers 401**, because the auth API's GetGrant never returns `interactionNonce`. So no
   `interact_ref`, no continue, no token. (Continuing with the `interactRef` read from the Admin API gives
   500: the grant is still PENDING.)
@@ -181,7 +181,7 @@ What doesn't (each seen at least twice; texts in `UPSTREAM_ISSUES.md` 5 to 7, no
 - **The resource server checks no token at all**: quotes and outgoing payments go through with a made-up
   token, quotes with none. Grant limits aren't enforced either (upstream #278, open).
 
-Compose fixes added to `docker-compose.override.yaml` on the way (texts for a #466 comment, not posted):
+Compose fixes added to `docker-compose.override.yaml` on the way (posted as a comment on #466):
 Node B's auth server reads `OPEN_PAYMENTS_AUTH_SERVER_URL`, not the `..._SERVICE_URL` the compose sets, so
 it handed out Node A's URLs; Node B's resource server had no auth server URL; neither auth server had
 `IDP_URL`. Also, the interaction cookie is `Secure`, so over plain http it is only set with
