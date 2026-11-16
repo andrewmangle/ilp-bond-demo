@@ -37,8 +37,8 @@ Also seen, not filed:
   nodes, Node B's broker kept rebalancing `notifications-event-handler` every 5 s (`COORDINATOR_NOT_AVAILABLE
   when storing group assignment during SyncGroup`, `__consumer_offsets` partition 38). Payment-created webhooks
   stopped, so payments stayed `CREATED`. Restarting `kafka-b` stopped the coordinator errors, but Node B
-  still didn't settle payments (new ones timed out, even after restarting all of Node B's services); only
-  wiping the stack (`down --volumes`) was the next step. Not reproduced yet.
+  still didn't settle payments (new ones timed out, even after restarting all of Node B's services), so
+  we wiped the stack (`down --volumes`). Not reproduced yet.
 - Grant spend limits are not enforced yet (known: #278).
 - The OpenAPI `Payment` and `PaymentIntent` schemas have no `metadata`, but the API returns it. The Admin API
   has no health endpoint. When a remote quote fails, `payments-api-service` logs `Unknown response event:
