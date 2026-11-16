@@ -1,11 +1,15 @@
 // The Rhyza playground's two nodes, acting as university central banks. Same keys as the Rafiki rail (hbcu,
 // hague) so pages and stored rows read the same; Cape Town is Phase 5. Topology comes from rhyza/config.mjs.
+//
+// `currency` is what the node's customer accounts hold in the app's ledger; `railCurrency` is what its Rhyza
+// wallets hold and its payments move (see fx.js). RHYZA_HAGUE_CURRENCY=USD keeps the Hague node in USD.
 
 const { config } = require('./rhyza')
 const { db } = require('../../db')
 
 const node = (c, extra) => ({
-  currency: c.currency ?? config.ASSET,
+  currency: extra.currency ?? config.ASSET,
+  railCurrency: config.ASSET,
   adminUrl: c.adminUrl,
   ilpAddress: c.ilpAddress,
   peerId: c.peerIdForOther, // this node's id for its peer (the other node)
@@ -25,6 +29,7 @@ const NODES = {
     label: 'Hague node',
     bankName: 'Hague central bank',
     rhyza: 'Node B',
+    currency: process.env.RHYZA_HAGUE_CURRENCY || 'EUR',
     aseMock: 'http://localhost:4300',
     openPayments: 'http://localhost:4002',
     auth: 'http://localhost:4003'

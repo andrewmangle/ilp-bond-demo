@@ -13,6 +13,7 @@ const { NODES } = require('./nodes')
 const { admin, appState, toScale, config, SCALE } = require('./rhyza')
 const bank = require('./mock-bank')
 const payments = require('./payments')
+const fx = require('./fx')
 const { db, now } = require('../../db')
 const { demoEpoch } = require('../../maintenance')
 const { UserError, toMinorUnits } = require('../../money')
@@ -22,9 +23,9 @@ const parse = (json) => (json ? JSON.parse(json) : null)
 async function getAsset(nodeKey) {
   const node = NODES[nodeKey]
   const { assets } = await admin(nodeKey).listAssets()
-  const asset = assets.find((a) => a.code === node.currency)
-  if (!asset) throw new Error(`${node.label} has no ${node.currency} asset (run node rhyza/seed.mjs)`)
-  return { id: asset.code, code: asset.code, scale: SCALE }
+  if (!assets.find((a) => a.code === node.railCurrency)) throw new Error(`${node.label} has no ${node.railCurrency} asset (run node rhyza/seed.mjs)`)
+  // The node's own currency lives in the app's ledger; Rhyza carries it as railCurrency (fx.js)
+  return { id: node.currency, code: node.currency, scale: SCALE }
 }
 
 // Liquidity this app knows was deposited on the node's peer: the playground seed and every mint since
@@ -130,13 +131,13 @@ async function openStudentAccount(nodeKey, name, initialFunding) {
   return { account: await bank.findAccount(nodeKey, account.id), funding }
 }
 
-// --- Exchange rate against USD (pushed to Rhyza with POST /rates; used from Phase 3) ---
+// --- Exchange rate against USD, used by the app to convert (fx.js); Rhyza moves USD only ---
 
 async function getRate(nodeKey) {
   const { currency } = NODES[nodeKey]
   if (currency === 'USD') return { currency, perUsd: 1, editable: false }
-  const rates = await bank.getUsdRates()
-  return { currency, perUsd: rates[currency] ?? null, editable: true }
+  const rate = fx.ratesWithSource()[currency]
+  return { currency, perUsd: rate?.perUsd ?? null, editable: true, source: rate?.source ?? null }
 }
 
 async function setRate(nodeKey, perUsdInput) {
@@ -145,7 +146,6 @@ async function setRate(nodeKey, perUsdInput) {
   const perUsd = Number(perUsdInput)
   if (!/^\d+(\.\d+)?$/.test(String(perUsdInput).trim()) || !(perUsd > 0)) throw new UserError(`Enter how many ${currency} one USD buys, e.g. 0.92`)
   const { perUsd: oldPerUsd } = await getRate(nodeKey)
-  await Promise.all(Object.keys(NODES).map((key) => bank.setUsdRate(key, currency, perUsd)))
   const at = now()
   db.prepare(
     `INSERT INTO rates (currency, node, per_usd, updated_at) VALUES (?, ?, ?, ?)
@@ -156,16 +156,9 @@ async function setRate(nodeKey, perUsdInput) {
   return { currency, oldPerUsd, perUsd, effectiveBy: at }
 }
 
-// Rhyza rates expire (rateTtlSecs): push every non-USD node currency's rate again, well before they do
-let lastPush = 0
+// Called every 30 s by server.js: refreshes the ECB reference rates when they are 6 hours old
 async function syncRates() {
-  if (Date.now() - lastPush < (bank.RATE_TTL_SECS * 1000) / 4) return
-  const currencies = [...new Set(Object.values(NODES).map((n) => n.currency))].filter((c) => c !== 'USD')
-  const rates = await bank.getUsdRates()
-  for (const nodeKey of Object.keys(NODES)) {
-    for (const currency of currencies) await bank.setUsdRate(nodeKey, currency, rates[currency])
-  }
-  lastPush = Date.now()
+  await fx.refreshMarketRates()
 }
 
 function rateHistory(nodeKey) {
@@ -206,7 +199,7 @@ async function activity(nodeKey) {
       direction: within ? 'within' : 'out',
       from: r?.sender_name ?? nameByWallet.get(o.senderWalletAddress) ?? 'unknown account',
       to: r?.receiver_name ?? o.metadata?.toName ?? 'account on another node',
-      sent: toScale(o.sentAmount),
+      sent: parse(r?.sent) ?? toScale(o.sentAmount), // the app's booking, in the sender's currency
       received: parse(r?.received) ?? toScale(localIntent?.receivedAmount) ?? null,
       state: appState(o.state),
       error: o.failReason ?? null,

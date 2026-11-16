@@ -8,9 +8,14 @@
 // The sender's debit is held out of their balance when the payment is created (as the Rafiki mock bank did on
 // outgoing_payment.created); at settlement the sender keeps whatever wasn't sent and the receiver is credited
 // what the intent received. Holdings and coupons hang off onSettled exactly as on the Rafiki rail.
+//
+// Rhyza moves rail currency (USD) only; the app converts each side into its account's currency (fx.js). So a
+// quote has two sets of amounts: what the app books (debitAmount in the sender's currency, receiveAmount in the
+// receiver's) and what Rhyza moves (rail).
 
 const { admin, appState, toScale, SCALE } = require('./rhyza')
 const bank = require('./mock-bank')
+const fx = require('./fx')
 const { db, now } = require('../../db')
 const { UserError, formatAmount } = require('../../money')
 
@@ -52,15 +57,25 @@ const metadataFor = (type, sender, receiver) => ({
 
 // Steps 1 and 2. Returns the quote in the app's shape (amounts as { value, assetCode, assetScale }).
 async function intentAndQuote({ sender, receiver, metadata, debitAmount, receiveAmount }) {
+  const booked = fx.plan({
+    senderCurrency: sender.assetCode,
+    receiverCurrency: receiver.assetCode,
+    debitValue: debitAmount?.value,
+    receiveValue: debitAmount ? undefined : receiveAmount?.value
+  })
   const intent = await admin(receiver.node).createPaymentIntent(receiver.walletAddress, undefined, metadata, {
     expiresAt: new Date(Date.now() + INTENT_TTL_MS).toISOString()
   })
   if (!intent.openPaymentsUrl) throw new Error('Rhyza returned a payment intent without an openPaymentsUrl')
-  const q = await admin(sender.node).createQuote(sender.walletAddress, intent.openPaymentsUrl, {
-    debitAmount: debitAmount?.value,
-    receiveAmount: receiveAmount?.value
-  })
+  const q = await admin(sender.node).createQuote(sender.walletAddress, intent.openPaymentsUrl,
+    debitAmount ? { debitAmount: booked.rail } : { receiveAmount: booked.rail })
   if (q.state && q.state !== 'COMPLETED') throw new Error(`the quote is ${q.state}${q.message ? `: ${q.message}` : ''}`)
+  // Rhyza's quote is rail to rail with no fees, so both sides normally equal booked.rail. If it quoted anything
+  // else, book what it quoted, converted.
+  const railDebit = BigInt(q.debitAmount)
+  const railReceive = BigInt(q.receiveAmount)
+  const debit = railDebit === booked.rail ? booked.debit : fx.fromRail(railDebit, sender.assetCode, 'up')
+  const credit = railReceive === booked.rail ? booked.credit : fx.fromRail(railReceive, receiver.assetCode, 'down')
   return {
     intent,
     quote: {
@@ -68,8 +83,9 @@ async function intentAndQuote({ sender, receiver, metadata, debitAmount, receive
       senderIntentId: q.paymentIntentId,
       expiresAt: q.expiresAt ?? intent.expiresAt ?? new Date(Date.now() + INTENT_TTL_MS).toISOString(),
       exchangeRate: q.exchangeRate ?? null,
-      debitAmount: { value: String(q.debitAmount), assetCode: sender.assetCode, assetScale: SCALE },
-      receiveAmount: { value: String(q.receiveAmount), assetCode: receiver.assetCode, assetScale: SCALE }
+      debitAmount: { value: String(debit), assetCode: sender.assetCode, assetScale: SCALE },
+      receiveAmount: { value: String(credit), assetCode: receiver.assetCode, assetScale: SCALE },
+      rail: { debit: String(railDebit), receive: String(railReceive), assetCode: fx.RAIL, assetScale: SCALE }
     }
   }
 }
@@ -92,8 +108,8 @@ async function quote({ type, sender, receiver, debitAmount, receiveAmount, detai
     throw new UserError(`Rhyza could not quote this payment: ${err.message}`)
   }
   const { intent, quote: q } = made
-  if (tooSmall(q.debitAmount.value) || tooSmall(q.receiveAmount.value)) {
-    throw new UserError(`On the Rhyza rail the smallest payment is ${minimum} (a Rhyza alpha ledger bug)`)
+  if (tooSmall(q.rail.debit) || tooSmall(q.rail.receive)) {
+    throw new UserError(`On the Rhyza rail the smallest payment is ${minimum} USD (a Rhyza alpha ledger bug)`)
   }
   if (BigInt(q.debitAmount.value) > BigInt(sender.balance)) {
     throw new UserError(`${sender.name} needs ${formatAmount(q.debitAmount)} but only has ${formatAmount({ ...sender, value: sender.balance })}`)
@@ -179,8 +195,10 @@ async function createPayment({ type, details, metadata, sender, receiver, incomi
       receiver.node, receiver.id, receiver.name, receiver.walletAddress,
       JSON.stringify(q.debitAmount), JSON.stringify(q.receiveAmount), now(), details ? JSON.stringify(details) : null
     )
-    db.prepare(`INSERT INTO rhyza_payments (id, sender_node, sender_intent_id, receiver_node, receiver_intent_id, hold) VALUES (?, ?, ?, ?, ?, ?)`)
-      .run(created.id, sender.node, created.paymentIntentId ?? q.senderIntentId, receiver.node, receiverIntentId, q.debitAmount.value)
+    db.prepare(`INSERT INTO rhyza_payments (id, sender_node, sender_intent_id, receiver_node, receiver_intent_id, hold, rail_amount, credit)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(created.id, sender.node, created.paymentIntentId ?? q.senderIntentId, receiver.node, receiverIntentId, q.debitAmount.value,
+        q.rail.debit, q.receiveAmount.value)
     db.exec('COMMIT')
   } catch (err) {
     db.exec('ROLLBACK')
@@ -268,13 +286,21 @@ async function settle(paymentId, payment) {
     throw err
   }
 
+  // Book in each account's currency: the share of the hold and of the credit for the rail amount that moved
+  const railSent = BigInt(payment.sentAmount?.value ?? 0)
+  const railReceived = BigInt(received?.value ?? 0)
+  const planned = rp.rail_amount ?? rp.hold // rows from before fx.js were rail currency on both sides
+  const debited = rp.rail_amount ? fx.share(rp.hold, railSent, planned) : railSent
+  const credited = rp.rail_amount ? fx.share(rp.credit, railReceived, planned) : railReceived
+  const senderAmount = { value: debited.toString(), assetCode: JSON.parse(row.quoted_debit).assetCode, assetScale: SCALE }
+  const receiverAmount = received && { value: credited.toString(), assetCode: JSON.parse(row.quoted_receive).assetCode, assetScale: SCALE }
+
   db.exec('BEGIN')
   try {
-    const sent = BigInt(payment.sentAmount?.value ?? 0)
-    bank.adjust(row.sender_account, BigInt(rp.hold) - sent) // the sender keeps what wasn't sent
-    if (received && received.value !== '0') bank.adjust(row.receiver_account, received.value)
+    bank.adjust(row.sender_account, BigInt(rp.hold) - debited) // the sender keeps what wasn't sent
+    if (credited > 0n) bank.adjust(row.receiver_account, credited)
     db.prepare(`UPDATE payments SET state = ?, error = ?, sent = ?, received = ?, completed_at = ? WHERE id = ?`).run(
-      payment.state, payment.error ?? null, JSON.stringify(payment.sentAmount), received ? JSON.stringify(received) : null, now(), paymentId
+      payment.state, payment.error ?? null, JSON.stringify(senderAmount), receiverAmount ? JSON.stringify(receiverAmount) : null, now(), paymentId
     )
     db.exec('COMMIT')
   } catch (err) {
@@ -324,7 +350,7 @@ async function payUnderGrant({ type, grant, sender, receiver, receiveAmount, det
     return { state: 'NOT_CREATED', error: err.message, quote: null }
   }
   const { intent, quote: q } = made
-  if (tooSmall(q.debitAmount.value)) return { state: 'NOT_CREATED', error: TOO_SMALL, quote: q }
+  if (tooSmall(q.rail.debit) || tooSmall(q.rail.receive)) return { state: 'NOT_CREATED', error: TOO_SMALL, quote: q }
   const skip = check ? await check(q) : null
   if (skip) return { state: 'SKIPPED', reason: skip, quote: q }
 

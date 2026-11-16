@@ -140,6 +140,25 @@ amount) is kept in the git stash "Phase 3 WIP"; `git stash pop` restores it. Bot
 The playground still holds the EUR asset, the `nl-bond-issuer-eur` wallet and the pushed EUR rates
 (they expire in a week); they don't affect USD payments.
 
+### Phase 3 in the app instead (Nov 15, 2026)
+
+Andrew's call: convert in the app until Rhyza can. Every Rhyza wallet stays USD and every payment moves USD
+between the nodes; the app's ledger books the Hague node's accounts in EUR (`lib/rails/rhyza/fx.js`):
+
+- A quote fixes one side in that side's currency, converts it to the USD Rhyza moves, and converts again for
+  the other side. Rounding never charges the sender less, or credits the receiver more, than the USD moved is
+  worth. Same currency on both sides books the same amount on both.
+- Rates: a central bank's own setting wins, else the ECB reference rate from `https://api.frankfurter.dev`
+  (no key; fetched at start and every 6 hours, stored in `market_rates`), else the old 0.92 baseline. The
+  central bank page says which one is in use. Nothing is pushed to Rhyza's `POST /rates` any more.
+- `RHYZA_HAGUE_CURRENCY=USD` keeps the Hague node in USD. Changing it needs Reset Demo (accounts keep the
+  currency they were opened in).
+- Test: `node localenv/university-payments/test/rhyza-fx.e2e.mjs` (USD to EUR, EUR to USD, an EUR bond
+  bought in USD). Checked by hand: a 0.41 EUR coupon arrives as 0.45 USD.
+
+This is not Rhyza doing FX: the Phase 3 acceptance (Rhyza's quote shows the converted amount) still waits on
+#424 and #425, and the stash still holds that code.
+
 ## Switching between the Rafiki demo and this playground
 
 The Rafiki demo on `main` keeps working; nothing in this folder changes it. The two stacks

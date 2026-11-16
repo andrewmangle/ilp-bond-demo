@@ -37,6 +37,13 @@ db.exec(`
     hold TEXT NOT NULL                  -- debit held from the sender's balance until it settles
   );
 `)
+// Added with the app-side currency conversion (fx.js): the rail amount Rhyza moves, and the receiver's credit in
+// the receiver's currency. Older rows have neither and are booked as rail currency on both sides.
+for (const [column, type] of [['rail_amount', 'TEXT'], ['credit', 'TEXT']]) {
+  if (!db.prepare('PRAGMA table_info(rhyza_payments)').all().some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE rhyza_payments ADD COLUMN ${column} ${type}`)
+  }
+}
 
 const admins = {}
 function admin(nodeKey) {

@@ -9,6 +9,7 @@
 const { randomUUID } = require('crypto')
 const { NODES, TREASURY_PATH } = require('./nodes')
 const { admin, SCALE } = require('./rhyza')
+const fx = require('./fx')
 const { db, now } = require('../../db')
 const { UserError, toMinorUnits } = require('../../money')
 
@@ -18,9 +19,6 @@ const STORY_ACCOUNTS = [
   { node: 'hague', path: 'sophie', name: 'Sophie Janssen' },
   { node: 'hague', path: 'ellis-family', name: 'Ellis Family Savings' }
 ]
-
-// Baseline units per 1 USD, as the Rafiki rail's seed.yml; a central bank's own setting overrides it
-const BASE_PER_USD = { EUR: 0.92, ZAR: 18.2 }
 
 function instance() {
   let row = db.prepare(`SELECT value FROM settings WHERE key = 'rhyza_instance'`).get()
@@ -51,8 +49,8 @@ const view = (row) => ({
 
 async function openWallet(nodeKey, { path, name, isTreasury = false }) {
   const pathName = `${path}-${instance()}`
-  const currency = NODES[nodeKey].currency
-  const created = await admin(nodeKey).createWalletAddress(pathName, currency, name)
+  const { currency, railCurrency } = NODES[nodeKey]
+  const created = await admin(nodeKey).createWalletAddress(pathName, railCurrency, name) // the account itself holds `currency`
   const id = randomUUID()
   db.prepare(
     `INSERT INTO rhyza_accounts (id, node, name, path, wallet_address, wallet_id, asset_code, asset_scale, balance, is_treasury, created_at)
@@ -149,24 +147,14 @@ async function deposit(nodeKey, accountId, decimalAmount) {
   adjust(account.id, toMinorUnits(decimalAmount, account.assetScale))
 }
 
-// --- Rates: units of each currency per 1 USD ---
+// --- Rates: units of each currency per 1 USD (fx.js). Rhyza doesn't convert, so nothing is pushed to it. ---
 
 async function getUsdRates() {
-  const stored = Object.fromEntries(db.prepare('SELECT currency, per_usd FROM rates').all().map((r) => [r.currency, r.per_usd]))
-  return { ...BASE_PER_USD, ...stored }
+  const { USD, ...rest } = fx.perUsd()
+  return rest
 }
 
-// Pushes the rate to one node, for payments within it and to or from its peer, both directions (POST /rates).
-// Rates expire in Rhyza, so central-bank.syncRates() pushes them again before they do.
-const RATE_TTL_SECS = 24 * 60 * 60
-async function setUsdRate(nodeKey, currency, perUsd) {
-  const a = admin(nodeKey)
-  const peerId = NODES[nodeKey].peerId
-  for (const p of [null, peerId]) {
-    await a.setRate('USD', currency, perUsd, { peerId: p, rateTtlSecs: RATE_TTL_SECS })
-    await a.setRate(currency, 'USD', 1 / perUsd, { peerId: p, rateTtlSecs: RATE_TTL_SECS })
-  }
-}
+async function setUsdRate() {}
 
 module.exports = {
   listNodeAccounts,
@@ -183,6 +171,5 @@ module.exports = {
   resetAccounts,
   hold,
   adjust,
-  STORY_ACCOUNTS,
-  RATE_TTL_SECS
+  STORY_ACCOUNTS
 }

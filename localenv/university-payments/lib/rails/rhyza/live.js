@@ -44,8 +44,9 @@ function paymentItem(nodeKey, o, row, byWallet) {
     error: o.failReason ?? null,
     from: { node: nodeKey, nodeLabel: NODES[nodeKey].label, name: row?.sender_name ?? byWallet.get(o.senderWalletAddress) ?? o.metadata?.fromName ?? 'an account' },
     to: { node: toNode, nodeLabel: NODES[toNode].label, name: row?.receiver_name ?? o.metadata?.toName ?? `an account on ${NODES[toNode].label}` },
-    sent: sent.value !== '0' || final ? sent : toScale(o.debitAmount),
-    received: parse(row?.received) ?? (state === 'COMPLETED' ? null : toScale(o.receiveAmount)),
+    // The app's booking (each side in its own currency) once settled, else what Rhyza moves (rail currency)
+    sent: parse(row?.sent) ?? (sent.value !== '0' || final ? sent : parse(row?.quoted_debit) ?? toScale(o.debitAmount)),
+    received: parse(row?.received) ?? (state === 'COMPLETED' ? null : parse(row?.quoted_receive) ?? toScale(o.receiveAmount)),
     estimated: !row?.received
   }
 }

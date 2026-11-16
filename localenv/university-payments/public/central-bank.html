@@ -129,6 +129,7 @@
     $('rate').innerHTML = `
       <p class="big">1 USD = ${r.perUsd === null ? '?' : Number(r.perUsd).toLocaleString(undefined, { maximumFractionDigits: 6 })} ${esc(r.currency)}</p>
       ${r.editable ? '' : '<p class="note">USD is the base currency of the network, so this node\'s rate is always 1. The other two central banks set theirs against it.</p>'}
+      ${r.source ? `<p class="note">${esc(r.source)}</p>` : ''}
       ${r.history.length ? `<p class="note">Changes: ${r.history.map((h) => `${fmtTime(h.at)}: ${h.oldPerUsd ?? '?'} → ${h.perUsd}`).join('; ')}</p>` : ''}`
     $('rate-form').hidden = !isOwnNode() || !r.editable
     if (!$('r-value').value) $('r-value').placeholder = r.perUsd ?? ''
