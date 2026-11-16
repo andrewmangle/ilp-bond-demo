@@ -17,7 +17,8 @@ PROFILE=()
 compose() {
   docker compose -p rhyza-bonds "${PROFILE[@]}" \
     -f "$SRC/docker/docker-compose.yaml" \
-    -f "$SRC/docker/docker-compose.node-b.yaml" "$@"
+    -f "$SRC/docker/docker-compose.node-b.yaml" \
+    -f "$HERE/docker-compose.override.yaml" "$@"
 }
 
 fetch_src() {

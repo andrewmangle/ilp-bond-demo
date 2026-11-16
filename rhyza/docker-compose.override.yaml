@@ -1,0 +1,14 @@
+# Fixes to Rhyza's own compose files at the pinned commit (259a9b9), applied by rhyza/setup.sh.
+# Remove each one once upstream has it.
+
+services:
+  # docker-compose.node-b.yaml leaves out REDIS_URL and SESSION_SECRET, which Node A's copy sets, so
+  # Node B's Open Payments auth server exits on start ("REDIS_URL is not set; refusing to start without a
+  # shared session store") and restarts forever. Needed for grants (Phase 4).
+  open-payments-auth-service-b:
+    environment:
+      REDIS_URL: redis-b:6379
+      SESSION_SECRET: local-dev-session-secret-not-for-production
+    depends_on:
+      redis-b:
+        condition: service_healthy

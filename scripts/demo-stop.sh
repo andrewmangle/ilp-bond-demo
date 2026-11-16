@@ -2,6 +2,8 @@
 # Stops the demo app (cleanly: a payment run in progress finishes first) and the Rafiki containers.
 # Nothing is lost: the app's data, the mock banks' accounts and Rafiki's databases are all kept, and the demo
 # clock doesn't move while everything is stopped.
+# PAYMENT_RAIL=rhyza: the Rhyza version of the demo (rhyza/demo-stop.sh)
+{ [ "${PAYMENT_RAIL:-}" = rhyza ] || { [ -z "${PAYMENT_RAIL:-}" ] && [ "$(cat "$(dirname "$0")/../localenv/university-payments/data/app.rail" 2>/dev/null)" = rhyza ]; }; } && exec "$(dirname "$0")/../rhyza/demo-stop.sh" "$@"
 source "$(dirname "$0")/demo-lib.sh"
 
 if pid=$(app_pid); then

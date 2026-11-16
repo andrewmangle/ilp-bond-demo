@@ -70,6 +70,59 @@ Node 24 are NOT needed on your machine; the images build inside Docker.
 - **Payment FAILED, "Insufficient funds"**: liquidity deposit did not land. `reset`, `up`, seed again.
 - **Payment stuck in CREATED**: the mock service did not approve it. Check `./rhyza/setup.sh logs ase-mock-service ase-mock-service-b`.
 
+## The bond app on Rhyza (Phase 2)
+
+The demo app (`localenv/university-payments`) runs on either rail, chosen with `PAYMENT_RAIL`:
+
+```bash
+PAYMENT_RAIL=rhyza scripts/demo-start.sh    # = rhyza/demo-start.sh: playground up, peers, app on :3040
+scripts/demo-reset.sh --seed -y             # same script on both rails
+scripts/demo-status.sh                      # follows the running app's rail
+scripts/demo-stop.sh                        # likewise
+```
+
+Without `PAYMENT_RAIL` (or with `PAYMENT_RAIL=rafiki`) everything is the Rafiki demo, as on `main`.
+
+How the switch works (`localenv/university-payments/lib/rail.js`): the rest of the app reaches money
+movement only through eight modules (`nodes`, `mock-bank`, `admin-api`, `payments`, `open-payments`,
+`central-bank`, `live`, `demo`). On `PAYMENT_RAIL=rhyza`, requests for those resolve to
+`lib/rails/rhyza/<module>.js` instead, with the same exports. `bonds.js`, `coupons.js`, `plans.js`,
+`clock.js`, `db.js`, `server.js` and the pages are the same code on both rails. On the Rafiki rail
+`rail.js` does nothing. Changes to existing files: one `require` and one log line in `server.js`, one
+delegation line in each of `scripts/demo-start.sh`, `demo-stop.sh`, `demo-status.sh`.
+
+What the Rhyza rail does:
+
+| Concern | Rhyza rail |
+|---|---|
+| Accounts and balances | Kept by the app in SQLite (`rhyza_accounts`). Rhyza holds no customer balances; the app plays the FSP ledger the Rafiki mock bank used to be. Each account has a Rhyza wallet address |
+| Payment | Intent on the receiver's node, quote and payment on the sender's node, poll, complete the intent, then book both sides. The debit is held while sending |
+| Mint | Treasury credit in the app ledger plus `POST /liquidity/deposit` on the node's peer |
+| Activity, live feed | `GET /payments` and `GET /payment-intents`, joined to the app's records |
+| Grants (coupons, recurring buys) | Phase 4. Until then a stand-in approves at once (no consent screen) and the payments go through the Admin API; limits are recorded, not enforced by Rhyza |
+| Database | `data/demo-rhyza.db`, separate from the Rafiki rail's `data/demo.db` |
+| Reset Demo | Wipes the app data and ledger and opens fresh wallet addresses (a new pathName suffix). Peers and liquidity from `rhyza/seed.mjs` stay |
+| Seed Demo | Treasuries on both nodes, Jordan (HBCU, A), Sophie and Ellis Family Savings (Hague, B), Sophie's Hague Housing Bond |
+
+Phase 2 acceptance, run on Nov 16, 2026 through the app's HTTP API with the same `x-acting-as`
+roles the pages send: Sophie (Hague, Node B) issued a bond; Jordan (HBCU, Node A) bought 500.00 USD
+of it; Sophie approved both grants; daily coupons of 0.10 USD were paid B to A. Both nodes' activity
+and the live feed showed the purchase and the coupons with matching sent and received amounts, and the
+balances reconciled (Sophie 1499.90, Jordan 500.10 after one coupon).
+
+### Rhyza bug: payments under 0.10 take down the node's ledger
+
+At the pinned commit, `pal-domain-lib` `liquidity/utils.ts` `amountToBigIntOfSize` rejects any amount
+whose digit count is below its scale, so 1 to 9 cents at scale 2 throw `LedgerPrecisionLossError:
+Amount input error: sourceAmount (4) is smaller than sourceScale (2).` The exception is uncaught: the
+`pal-ledger-command-handler-service` exits, the payment stays `PROCESSING`, and after the restart the
+node's ledger stopped settling other payments (the Phase 1 smoke test then hung in `SENDING` until a
+`setup.sh reset`). It surfaced on a 0.04 USD daily coupon.
+
+The Rhyza rail therefore never sends less than 0.10: a student payment below that is refused with a
+message, and a smaller coupon is carried to the next date (its line shows as failed with the reason;
+what is owed is kept). The Rafiki rail still goes down to 0.01. Worth reporting upstream.
+
 ## Switching between the Rafiki demo and this playground
 
 The Rafiki demo on `main` keeps working; nothing in this folder changes it. The two stacks
@@ -116,6 +169,10 @@ Observations, none needing a code change:
   3003, 3004, 3010, 4000, 4003, 4004, 4100, 4300, 5110, 5111, 6379, 6380, 9092, 9093,
   27017, 27018 and the gRPC ports 4051 to 4054 and 50051 to 50054.
 - **Memory:** about 5.0 GiB across 47 containers (`docker stats --no-stream`), observability off.
+- **Node B's Open Payments auth server crash-loops** at the pinned commit:
+  `docker-compose.node-b.yaml` leaves out `REDIS_URL` and `SESSION_SECRET` (Node A's copy has them), so it
+  exits with "REDIS_URL is not set". Found in Phase 2 by the app's health check. Fixed with
+  `rhyza/docker-compose.override.yaml`, which `setup.sh` now also loads. Only grants (Phase 4) need it.
 - A short wait after `up` is needed before seeding; 45 seconds was enough here. A seed run
   too early fails with `Cannot reach http://localhost:3001`; just run it again.
 

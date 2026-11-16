@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Starts the three Rafiki nodes (Docker), waits until they are up and seeded, starts the demo app and prints
 # the URLs. Safe to run again: whatever is already running is left alone.
+# PAYMENT_RAIL=rhyza: the Rhyza version of the demo (rhyza/demo-start.sh)
+[ "${PAYMENT_RAIL:-rafiki}" = rhyza ] && exec "$(dirname "$0")/../rhyza/demo-start.sh" "$@"
 source "$(dirname "$0")/demo-lib.sh"
 
 echo "Starting the Rafiki nodes (Docker)…"

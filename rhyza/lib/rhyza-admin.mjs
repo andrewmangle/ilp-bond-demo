@@ -43,14 +43,30 @@ export function createRhyzaAdmin(baseUrl) {
     setRate: (sourceAssetCode, destinationAssetCode, rate, { peerId = null, rateTtlSecs = 3600 } = {}) =>
       call('POST', '/rates', { sourceAssetCode, destinationAssetCode, rate, peerId, rateTtlSecs }),
 
-    // Rafiki "incoming payment" == Rhyza "payment intent"
-    createPaymentIntent: (walletAddress, incomingAmount, metadata) =>
-      call('POST', '/payment-intents', { walletAddress, incomingAmount, ...(metadata ? { metadata } : {}) }),
+    // Rafiki "incoming payment" == Rhyza "payment intent".
+    // incomingAmount may be undefined for an amountless intent (spec: PaymentIntentCreate).
+    createPaymentIntent: (walletAddress, incomingAmount, metadata, { expiresAt } = {}) =>
+      call('POST', '/payment-intents', {
+        walletAddress,
+        ...(incomingAmount !== undefined ? { incomingAmount } : {}),
+        ...(expiresAt ? { expiresAt } : {}),
+        ...(metadata ? { metadata } : {})
+      }),
     getPaymentIntent: (id) => call('GET', `/payment-intents/${encodeURIComponent(id)}`),
+    // POST /payment-intents/{id}/complete. 409 if it cannot be completed in its current state.
+    completePaymentIntent: (id) => call('POST', `/payment-intents/${encodeURIComponent(id)}/complete`),
+    // GET /payment-intents: cursor paging, newest first by default, first <= 100
+    listPaymentIntents: (query = {}) => call('GET', `/payment-intents${qs(query)}`),
 
-    // Quote a payment intent held by another node, named by its Open Payments URL
-    createQuote: (walletAddress, paymentIntentUrl) =>
-      call('POST', '/quotes', { walletAddress, paymentIntentUrl }),
+    // Quote a payment intent named by its Open Payments URL (imported if another node holds it).
+    // debitAmount or receiveAmount fixes one side, as a string of minor units (spec: QuoteCreateBase).
+    createQuote: (walletAddress, paymentIntentUrl, { debitAmount, receiveAmount } = {}) =>
+      call('POST', '/quotes', {
+        walletAddress,
+        paymentIntentUrl,
+        ...(debitAmount !== undefined ? { debitAmount: String(debitAmount) } : {}),
+        ...(receiveAmount !== undefined ? { receiveAmount: String(receiveAmount) } : {})
+      }),
 
     // Rafiki "outgoing payment" == Rhyza "payment"
     createPayment: (walletAddress, paymentIntentId, quoteId, metadata) =>
@@ -58,8 +74,21 @@ export function createRhyzaAdmin(baseUrl) {
     getPayment: (intentId, id) =>
       call('GET', `/payment-intents/${encodeURIComponent(intentId)}/payments/${encodeURIComponent(id)}`),
     approvePayment: (intentId, id) =>
-      call('POST', `/payment-intents/${encodeURIComponent(intentId)}/payments/${encodeURIComponent(id)}/approve`)
+      call('POST', `/payment-intents/${encodeURIComponent(intentId)}/payments/${encodeURIComponent(id)}/approve`),
+    // POST .../cancel with PaymentCancel { reason }
+    cancelPayment: (intentId, id, reason) =>
+      call('POST', `/payment-intents/${encodeURIComponent(intentId)}/payments/${encodeURIComponent(id)}/cancel`, reason ? { reason } : {}),
+    // GET /payments: optional walletAddressId, paymentIntentId, cursor, first, last, sortOrder
+    listPayments: (query = {}) => call('GET', `/payments${qs(query)}`),
+
+    // There is no health endpoint in the Admin API spec; listing assets is the cheapest read
+    ping: () => call('GET', '/assets')
   };
+}
+
+function qs(query) {
+  const entries = Object.entries(query).filter(([, v]) => v !== undefined && v !== null);
+  return entries.length ? `?${new URLSearchParams(entries.map(([k, v]) => [k, String(v)]))}` : '';
 }
 
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'REJECTED', 'CANCELLED']);

@@ -5,6 +5,7 @@
 // "bank:<node>" or "student:<node>:<account id>", and the server only allows that role's actions.
 // Start the localenv first (`pnpm localenv:compose up -d`), then `pnpm localenv:university-payments`.
 
+const { RAIL } = require('./lib/rail') // PAYMENT_RAIL=rafiki (default) | rhyza; must come before the other lib modules
 const http = require('http')
 const { readFile } = require('fs/promises')
 const path = require('path')
@@ -278,6 +279,7 @@ const server = http
   .listen(PORT, () => {
     console.log(`University payments: http://localhost:${PORT} (bond market: /bonds, central banks: /central-bank)`)
     console.log(`Demo database: ${DB_FILE}`)
+    console.log(`Payment rail: ${RAIL}`)
   })
 
 // Put back rates the central banks have set if a mock bank restarted with its seed.yml rates

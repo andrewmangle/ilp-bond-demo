@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Shows whether the Rafiki containers, the demo app and its scheduler are up, and the demo clock.
+# PAYMENT_RAIL=rhyza: the Rhyza version of the demo (rhyza/demo-status.sh)
+{ [ "${PAYMENT_RAIL:-}" = rhyza ] || { [ -z "${PAYMENT_RAIL:-}" ] && [ "$(cat "$(dirname "$0")/../localenv/university-payments/data/app.rail" 2>/dev/null)" = rhyza ]; }; } && exec "$(dirname "$0")/../rhyza/demo-status.sh" "$@"
 source "$(dirname "$0")/demo-lib.sh"
 
 echo "Containers:"
