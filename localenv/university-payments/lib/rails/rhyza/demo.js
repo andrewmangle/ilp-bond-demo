@@ -5,8 +5,9 @@
 // Rhyza keeps its own history, and activity and the live feed only show what happened after the reset.
 // Peers and their liquidity are set up once by rhyza/seed.mjs and survive a Reset Demo.
 //
-// Seed Demo resets, then sets up the starting point: funded treasuries on both nodes, funded students Jordan
-// (HBCU) and Sophie (Hague), the Ellis Family Savings account on Hague, and Sophie's bond. No holdings yet.
+// Seed Demo resets, then sets up the starting point: funded treasuries on every node, funded students Jordan
+// (HBCU), Sophie (Hague) and, with Node C, Amara (Cape Town), the Ellis Family Savings account on Hague, and
+// Sophie's bond. No holdings yet.
 
 const { NODES } = require('./nodes')
 const { admin } = require('./rhyza')
@@ -28,11 +29,12 @@ const SCHEDULER_STALE_MS = 10_000
 const DEMO_TABLES = ['plan_runs', 'plans', 'coupon_lines', 'coupon_events', 'accruals', 'holdings', 'grants', 'bonds', 'mints', 'rate_changes', 'rates', 'payments']
 
 const SEED = {
-  treasuries: { hbcu: '1000000', hague: '1000000' },
+  treasuries: { hbcu: '1000000', hague: '1000000', capetown: '1000000' },
   students: [
     { node: 'hbcu', path: 'jordan', funding: '1000' },
     { node: 'hague', path: 'sophie', funding: '1000' }, // pays the bond's coupons
-    { node: 'hague', path: 'ellis-family', funding: null }
+    { node: 'hague', path: 'ellis-family', funding: null },
+    { node: 'capetown', path: 'amara', funding: '1000' }
   ],
   bond: { issuer: { node: 'hague', path: 'sophie' }, name: 'Hague Housing Bond', size: '1000', annualRate: '6', termDays: 365, minSlice: '100', couponFrequency: 'daily' }
 }
@@ -121,7 +123,7 @@ async function seed({ confirm } = {}) {
   const resetResult = await reset({ confirm })
   const out = { reset: resetResult, treasuries: {}, students: [], bond: null }
 
-  for (const [node, amount] of Object.entries(SEED.treasuries)) {
+  for (const [node, amount] of Object.entries(SEED.treasuries).filter(([node]) => NODES[node])) {
     out.treasuries[node] = (await centralBank.mint(node, amount)).treasuryBalance
   }
   const byPath = async (node, path) => {
@@ -129,7 +131,7 @@ async function seed({ confirm } = {}) {
     if (!account) throw new Error(`${NODES[node].label} has no ${path} account`)
     return account
   }
-  for (const s of SEED.students) {
+  for (const s of SEED.students.filter((s) => NODES[s.node])) { // Cape Town only with Node C
     const account = await byPath(s.node, s.path)
     if (s.funding) {
       const paid = await centralBank.fundStudent(s.node, account.id, s.funding)

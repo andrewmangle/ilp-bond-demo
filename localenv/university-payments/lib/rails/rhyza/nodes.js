@@ -1,5 +1,6 @@
-// The Rhyza playground's two nodes, acting as university central banks. Same keys as the Rafiki rail (hbcu,
-// hague) so pages and stored rows read the same; Cape Town is Phase 5. Topology comes from rhyza/config.mjs.
+// The Rhyza playground's nodes, acting as university central banks. Same keys as the Rafiki rail (hbcu, hague,
+// capetown) so pages and stored rows read the same. Topology comes from rhyza/config.mjs: Node A and Node B,
+// plus Node C (Cape Town) when RHYZA_NODES=3.
 //
 // `currency` is what the node's customer accounts hold in the app's ledger; `railCurrency` is what its Rhyza
 // wallets hold and its payments move (see fx.js). RHYZA_HAGUE_CURRENCY=USD keeps the Hague node in USD.
@@ -7,12 +8,15 @@
 const { config } = require('./rhyza')
 const { db } = require('../../db')
 
+const KEY_OF = { a: 'hbcu', b: 'hague', c: 'capetown' } // rhyza/config.mjs node -> app node
+
 const node = (c, extra) => ({
   currency: extra.currency ?? config.ASSET,
   railCurrency: config.ASSET,
   adminUrl: c.adminUrl,
   ilpAddress: c.ilpAddress,
-  peerId: c.peerIdForOther, // this node's id for its peer (the other node)
+  // this node's id for each running peer, by app node key
+  peers: Object.fromEntries(Object.entries(c.peers).filter(([k]) => config.nodes[k]).map(([k, id]) => [KEY_OF[k], id])),
   ...extra
 })
 
@@ -33,7 +37,18 @@ const NODES = {
     aseMock: 'http://localhost:4300',
     openPayments: 'http://localhost:4002',
     auth: 'http://localhost:4003'
-  })
+  }),
+  ...(config.nodes.c ? {
+    capetown: node(config.nodes.c, {
+      label: 'Cape Town node',
+      bankName: 'Cape Town central bank',
+      rhyza: 'Node C',
+      currency: process.env.RHYZA_CAPETOWN_CURRENCY || 'USD',
+      aseMock: 'http://localhost:5300',
+      openPayments: 'http://localhost:5002',
+      auth: 'http://localhost:5003'
+    })
+  } : {})
 }
 
 // pathName of each node's treasury (Rhyza takes a single path segment)

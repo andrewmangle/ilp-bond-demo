@@ -2,8 +2,8 @@
 //
 // Differences that come from Rhyza:
 //   - Rhyza has no asset liquidity, only peer liquidity. Minting books the money to the treasury in the app's
-//     ledger and deposits the same value (in the peering asset) as liquidity on the node's peer, so the money
-//     supply and the capacity to pay the other node grow together.
+//     ledger and deposits the same value (in the peering asset) as liquidity on each of the node's peers, so
+//     the money supply and the capacity to pay every other node grow together.
 //   - Rhyza has no read of a peer's liquidity. The overview shows what has been deposited (the playground seed
 //     plus mints), not what is left after payments.
 //   - Activity comes from GET /payments and GET /payment-intents on the node, joined to the app's records.
@@ -28,10 +28,10 @@ async function getAsset(nodeKey) {
   return { id: node.currency, code: node.currency, scale: SCALE }
 }
 
-// Liquidity this app knows was deposited on the node's peer: the playground seed and every mint since
+// Liquidity this app knows was deposited on one of the node's peers: the playground seed and every mint since
 function depositedPeerLiquidity(nodeKey) {
   const minted = db.prepare('SELECT amount FROM mints WHERE node = ?').all(nodeKey)
-    .reduce((sum, m) => sum + BigInt(parse(m.amount).peerDeposit ?? 0), BigInt(0))
+    .reduce((sum, m) => sum + BigInt(parse(m.amount).peerDeposit ?? 0), BigInt(0)) // deposited on every peer
   return { value: (BigInt(config.PEER_LIQUIDITY) + minted).toString(), assetCode: config.ASSET, assetScale: SCALE }
 }
 
@@ -49,7 +49,6 @@ async function overview(nodeKey) {
     supply[a.assetCode].accounts++
   }
   const treasury = accounts.find((a) => a.isTreasury) ?? null
-  const other = Object.entries(NODES).find(([key]) => key !== nodeKey)?.[1]
   const totalMinted = db.prepare('SELECT amount FROM mints WHERE node = ?').all(nodeKey)
     .reduce((sum, m) => sum + BigInt(parse(m.amount).value), BigInt(0))
 
@@ -69,7 +68,7 @@ async function overview(nodeKey) {
     },
     // The page's "Rafiki liquidity" line: on Rhyza, the total minted on this node
     rafikiLiquidity: { value: totalMinted.toString(), assetCode: node.currency, assetScale: SCALE },
-    peerLiquidity: other ? [{ peer: other.ilpAddress, liquidity: depositedPeerLiquidity(nodeKey) }] : [],
+    peerLiquidity: Object.keys(node.peers).map((key) => ({ peer: NODES[key].ilpAddress, liquidity: depositedPeerLiquidity(nodeKey) })),
     rate
   }
 }
@@ -89,7 +88,7 @@ async function mint(nodeKey, amount) {
   const peerDeposit = await inPeeringAsset(value, asset.code)
 
   const id = randomUUID()
-  await admin(nodeKey).depositLiquidity(node.peerId, config.ASSET, Number(peerDeposit), SCALE)
+  for (const peerId of Object.values(node.peers)) await admin(nodeKey).depositLiquidity(peerId, config.ASSET, Number(peerDeposit), SCALE)
   bank.adjust(treasury.id, value)
   const minted = { value, assetCode: asset.code, assetScale: asset.scale }
   db.prepare(`INSERT INTO mints (id, node, treasury_account, treasury_name, amount, created_at) VALUES (?, ?, ?, ?, ?, ?)`)

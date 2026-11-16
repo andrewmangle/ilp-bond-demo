@@ -17,7 +17,8 @@ const { UserError, toMinorUnits } = require('../../money')
 const STORY_ACCOUNTS = [
   { node: 'hbcu', path: 'jordan', name: 'Jordan Ellis' },
   { node: 'hague', path: 'sophie', name: 'Sophie Janssen' },
-  { node: 'hague', path: 'ellis-family', name: 'Ellis Family Savings' }
+  { node: 'hague', path: 'ellis-family', name: 'Ellis Family Savings' },
+  { node: 'capetown', path: 'amara', name: 'Amara Dube' } // only with Node C (RHYZA_NODES=3)
 ]
 
 function instance() {

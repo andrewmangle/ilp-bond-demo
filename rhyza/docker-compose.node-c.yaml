@@ -1,0 +1,456 @@
+# Node C: a third, fully independent Rhyza instance for the bond demo (Phase 5).
+#
+# Written for Rhyza commit 259a9b9 by copying docker/docker-compose.node-b.yaml: every service and host
+# suffixed -c instead of -b, ILP address private.rhyza.c, host ports in the 5000s (admin 5001, Open
+# Payments 5002, auth 5003, IdP 5004, ase-mock 5300, connector 5100, Kafka 9094, Redis 6381, MongoDB
+# 27019). Node B's compose fixes from docker-compose.override.yaml are built in (Redis session store,
+# auth server URLs, IDP_URL). Node B's Kafka console is left out to save memory.
+#
+# Each service runs Node B's image (rhyza-bonds-<service>-b, same source and Dockerfile) instead of building
+# its own, so `up` builds nothing new; Node B must have been built first. Layered after the base, Node B and
+# override files by rhyza/setup.sh when RHYZA_NODES=3. Regenerate it from node-b.yaml when the pin moves.
+name: rhyza
+services:
+  admin-api-service-c:
+    image: rhyza-bonds-admin-api-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      PAL_GRPC_URL: pal-api-service-c:50051
+      PAYMENTS_GRPC_URL: payments-api-service-c:50052
+      OPEN_PAYMENTS_URL: http://open-payments-resource-service-c:3002
+      ILP_GRPC_URL: ilp-api-service-c:50053
+      AUTH_GRPC_URL: auth-api-service-c:50054
+      MONGODB_URL: mongodb://root:mongoPass@mongodb-c:27017
+      KAFKA_URL: kafka-c:19092
+    ports:
+      - '5001:3001'
+    depends_on:
+      mongodb-c:
+        condition: service_healthy
+      pal-api-service-c:
+        condition: service_started
+      payments-api-service-c:
+        condition: service_started
+      ilp-api-service-c:
+        condition: service_started
+    networks:
+      - rhyza
+
+  open-payments-resource-service-c:
+    image: rhyza-bonds-open-payments-resource-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      OPEN_PAYMENTS_AUTH_SERVICE_URL: http://localhost:5003
+      PAL_GRPC_URL: pal-api-service-c:50051
+      PAYMENTS_GRPC_URL: payments-api-service-c:50052
+      OPEN_PAYMENTS_RESOURCE_SERVICE_URL: http://open-payments-resource-service-c:3002
+      STREAM_SERVER_SECRET: cmFmaWtpLXYyLWRldi1zdHJlYW0tc2VjcmV0LTAwMDE
+      ILP_ADDRESS: private.rhyza.c
+    ports:
+      - '5002:3002'
+    depends_on:
+      pal-api-service-c:
+        condition: service_started
+      payments-api-service-c:
+        condition: service_started
+    networks:
+      # Reached across nodes by its Docker service name (open-payments-resource-service-c);
+      # no alias needed. Other nodes fetch this when a quote references a Node C intent.
+      - rhyza
+
+  pal-api-service-c:
+    image: rhyza-bonds-pal-api-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      MONGO_URL: mongodb://root:mongoPass@mongodb-c:27017/
+      KAFKA_URL: kafka-c:19092
+    ports:
+      - '5051:50051'
+    depends_on:
+      init-kafka-c:
+        condition: service_completed_successfully
+      mongodb-c:
+        condition: service_healthy
+      redis-c:
+        condition: service_healthy
+    networks:
+      - rhyza
+  pal-ledger-command-handler-service-c:
+    image: rhyza-bonds-pal-ledger-command-handler-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      KAFKA_URL: kafka-c:19092
+      REDIS_URL: redis-c:6379
+    depends_on:
+      init-kafka-c:
+        condition: service_completed_successfully
+      kafka-c:
+        condition: service_healthy
+      redis-c:
+        condition: service_healthy
+    networks:
+      - rhyza
+  pal-event-handler-service-c:
+    image: rhyza-bonds-pal-event-handler-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      MONGO_URL: mongodb://root:mongoPass@mongodb-c:27017/
+      KAFKA_URL: kafka-c:19092
+      REDIS_URL: redis-c:6379
+    depends_on:
+      init-kafka-c:
+        condition: service_completed_successfully
+      mongodb-c:
+        condition: service_healthy
+      redis-c:
+        condition: service_healthy
+    networks:
+      - rhyza
+
+  payments-api-service-c:
+    image: rhyza-bonds-payments-api-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      KAFKA_URL: kafka-c:19092
+      MONGODB_URL: mongodb://root:mongoPass@mongodb-c:27017
+    ports:
+      - '5052:50052'
+    depends_on:
+      mongodb-c:
+        condition: service_healthy
+      init-kafka-c:
+        condition: service_completed_successfully
+    networks:
+      - rhyza
+
+  payments-command-handler-service-c:
+    image: rhyza-bonds-payments-command-handler-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      KAFKA_URL: kafka-c:19092
+      MONGODB_URL: mongodb://root:mongoPass@mongodb-c:27017
+      PAL_GRPC_URL: pal-api-service-c:50051
+      UV_THREADPOOL_SIZE: 128
+      LOG_LEVEL: debug
+    depends_on:
+      mongodb-c:
+        condition: service_healthy
+      init-kafka-c:
+        condition: service_completed_successfully
+      pal-api-service-c:
+        condition: service_started
+    networks:
+      - rhyza
+
+  payments-event-handler-service-c:
+    image: rhyza-bonds-payments-event-handler-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      KAFKA_URL: kafka-c:19092
+    depends_on:
+      init-kafka-c:
+        condition: service_completed_successfully
+    networks:
+      - rhyza
+  notifications-command-handler-service-c:
+    image: rhyza-bonds-notifications-command-handler-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      KAFKA_URL: kafka-c:19092
+      MONGODB_URL: mongodb://root:mongoPass@mongodb-c:27017/
+      WEBHOOK_URL: http://ase-mock-service-c:3000/webhooks
+    ports:
+      - '5120:5100'
+    depends_on:
+      init-kafka-c:
+        condition: service_completed_successfully
+      mongodb-c:
+        condition: service_healthy
+    networks:
+      - rhyza
+
+  notifications-event-handler-service-c:
+    image: rhyza-bonds-notifications-event-handler-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      KAFKA_URL: kafka-c:19092
+      UV_THREADPOOL_SIZE: 128
+      NOTIFICATION_BATCH_SIZE: 10
+      RETRY_INTERVAL_MS: 20000
+      MONGODB_URL: mongodb://root:mongoPass@mongodb-c:27017
+    ports:
+      - '5121:5101'
+    depends_on:
+      mongodb-c:
+        condition: service_healthy
+      init-kafka-c:
+        condition: service_completed_successfully
+    networks:
+      - rhyza
+
+  ilp-connector-service-c:
+    image: rhyza-bonds-ilp-connector-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      KAFKA_URL: kafka-c:19092
+      LOG_LEVEL: debug
+      REDIS_URL: redis-c:6379
+      ILP_CONNECTOR_HTTP_PORT: 4000
+      ILP_CONNECTOR_PUBLIC_URL: http://ilp-connector-service-c:4000
+    ports:
+      - '5100:4000'
+    depends_on:
+      init-kafka-c:
+        condition: service_completed_successfully
+      redis-c:
+        condition: service_healthy
+    networks:
+      - rhyza
+  ase-mock-service-c:
+    image: rhyza-bonds-ase-mock-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      HOST: ase-mock-service-c
+      PORT: 3000
+      ADMIN_URL: http://admin-api-service-c:3001
+    ports:
+      - '5300:3000'
+    depends_on:
+      - admin-api-service-c
+    networks:
+      - rhyza
+
+  ilp-command-handler-service-c:
+    image: rhyza-bonds-ilp-command-handler-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      KAFKA_URL: kafka-c:19092
+      LOG_LEVEL: debug
+      MONGODB_URL: mongodb://root:mongoPass@mongodb-c:27017
+      REDIS_URL: redis-c:6379
+      STREAM_SERVER_SECRET: cmFmaWtpLXYyLWRldi1zdHJlYW0tc2VjcmV0LTAwMDE
+      ILP_ADDRESS: private.rhyza.c
+    depends_on:
+      init-kafka-c:
+        condition: service_completed_successfully
+      mongodb-c:
+        condition: service_healthy
+      redis-c:
+        condition: service_healthy
+    networks:
+      - rhyza
+
+  ilp-api-service-c:
+    image: rhyza-bonds-ilp-api-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      KAFKA_URL: kafka-c:19092
+      MONGODB_URL: mongodb://root:mongoPass@mongodb-c:27017
+    ports:
+      - '5053:50053'
+    depends_on:
+      init-kafka-c:
+        condition: service_completed_successfully
+      mongodb-c:
+        condition: service_healthy
+    networks:
+      - rhyza
+
+  ilp-event-handler-service-c:
+    image: rhyza-bonds-ilp-event-handler-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      KAFKA_URL: kafka-c:19092
+      LOG_LEVEL: debug
+    depends_on:
+      init-kafka-c:
+        condition: service_completed_successfully
+    networks:
+      - rhyza
+
+  auth-api-service-c:
+    image: rhyza-bonds-auth-api-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      KAFKA_URL: kafka-c:19092
+      MONGODB_URL: mongodb://root:mongoPass@mongodb-c:27017
+    ports:
+      - '5054:50054'
+    depends_on:
+      mongodb-c:
+        condition: service_healthy
+      init-kafka-c:
+        condition: service_completed_successfully
+    networks:
+      - rhyza
+
+  open-payments-auth-service-c:
+    image: rhyza-bonds-open-payments-auth-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      REDIS_URL: redis-c:6379
+      SESSION_SECRET: local-dev-session-secret-not-for-production
+      OPEN_PAYMENTS_AUTH_SERVER_URL: http://localhost:5003
+      IDP_URL: http://localhost:3040/rhyza/consent/node-c
+      AUTH_GRPC_URL: auth-api-service-c:50054
+      # localhost, unlike OPEN_PAYMENTS_RESOURCE_SERVICE_URL,
+      # because host needs to reach the continue and interaction
+      # URLs this builds. a Docker name only resolves in-network.
+      OPEN_PAYMENTS_AUTH_SERVICE_URL: http://localhost:5003
+    ports:
+      - '5003:3003'
+    depends_on:
+      redis-c:
+        condition: service_healthy
+      auth-api-service-c:
+        condition: service_started
+    networks:
+      - rhyza
+
+  idp-interaction-service-c:
+    image: rhyza-bonds-idp-interaction-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      OPEN_PAYMENTS_AUTH_SERVER_URL: http://localhost:5003
+      AUTH_GRPC_URL: auth-api-service-c:50054
+      IDP_SECRET: idp-secret
+    ports:
+      - '5004:3004'
+    depends_on:
+      auth-api-service-c:
+        condition: service_started
+    networks:
+      - rhyza
+
+  auth-command-handler-service-c:
+    image: rhyza-bonds-auth-command-handler-service-b
+    pull_policy: never
+    restart: always
+    environment:
+      KAFKA_URL: kafka-c:19092
+      MONGODB_URL: mongodb://root:mongoPass@mongodb-c:27017
+    depends_on:
+      mongodb-c:
+        condition: service_healthy
+      init-kafka-c:
+        condition: service_completed_successfully
+    networks:
+      - rhyza
+
+  mongodb-c:
+    image: mongo
+    restart: unless-stopped
+    volumes:
+      - mongodb-c-data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=mongoPass
+    ports:
+      - 27019:27017
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - rhyza
+
+  kafka-c:
+    image: apache/kafka:4.0.0
+    restart: unless-stopped
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-c:19092,EXTERNAL://kafka-c:9092
+      KAFKA_LISTENERS: INTERNAL://:19092,CONTROLLER://:19093,EXTERNAL://:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-c:19093
+      KAFKA_NUM_PARTITIONS: 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    healthcheck:
+      test: nc -z localhost 19092 || exit -1
+      start_period: 30s
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    ports:
+      - '9094:9092'
+    networks:
+      - rhyza
+
+  init-kafka-c:
+    image: apache/kafka:4.0.0
+    depends_on:
+      kafka-c:
+        condition: service_started
+    entrypoint: ['/bin/sh', '-c']
+    working_dir: /opt/kafka/bin/
+    command: |
+      "
+      # blocks until kafka-c is reachable
+      echo -e 'Existing kafka topics:'
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --list
+      echo -e '\nCreating kafka topics:'
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --topic audits
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --topic logs
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic payment-commands
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic payment-domain-events
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic asset-domain-events
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic peer-domain-events
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic ledger-commands
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic ledger-domain-events
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic ledger-snapshot-events
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic ledger-state-events
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic ledger-timer-events
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic wallet-address-domain-events
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic fxrate-domain-events
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic ilp-domain-events
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic ilp-commands
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic ilp-connector-commands
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic notification-commands
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic auth-commands
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --create --if-not-exists --partitions 24 --topic auth-domain-events
+      echo -e '\nSuccessfully created the following topics:'
+      ./kafka-topics.sh --bootstrap-server kafka-c:19092 --list
+      "
+    networks:
+      - rhyza
+
+  redis-c:
+    image: valkey/valkey:9.0
+    ports:
+      - '6381:6379'
+    healthcheck:
+      test: valkey-cli ping | grep -q PONG || exit 1
+      start_period: 10s
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+      - rhyza
+
+volumes:
+  mongodb-c-data:

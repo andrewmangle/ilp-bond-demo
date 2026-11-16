@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Seeds both nodes: asset, wallet addresses, peering in both directions, and
-// liquidity in both directions (purchases flow A -> B, coupons flow B -> A).
+// Seeds every node (two, or three with RHYZA_NODES=3): asset, wallet addresses, a peer for every other node,
+// and liquidity on each peer (purchases flow A -> B, coupons flow B -> A, and so on).
 // Safe to re-run. Writes wallet addresses to rhyza/.state.json.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRhyzaAdmin, RhyzaError } from './lib/rhyza-admin.mjs';
-import { nodes, ASSET, SCALE, PEER_TOKEN, PEER_LIQUIDITY } from './config.mjs';
+import { nodes, ASSET, SCALE, peerToken, PEER_LIQUIDITY } from './config.mjs';
 
 const STATE = fileURLToPath(new URL('./.state.json', import.meta.url));
 const state = existsSync(STATE) ? JSON.parse(readFileSync(STATE, 'utf8')) : { wallets: {}, funded: {} };
@@ -18,7 +18,6 @@ const step = async (label, fn) => {
 };
 
 for (const [key, node] of Object.entries(nodes)) {
-  const other = nodes[key === 'a' ? 'b' : 'a'];
   const admin = createRhyzaAdmin(node.adminUrl);
   console.log(`\n${node.label}  ${node.adminUrl}`);
 
@@ -32,27 +31,34 @@ for (const [key, node] of Object.entries(nodes)) {
     }
   }
 
-  await step(`peer -> ${other.ilpAddress}`, () => admin.createPeer({
-    id: node.peerIdForOther,
-    name: other.label,
-    assetCode: ASSET,
-    assetScale: SCALE,
-    ilpStaticAddress: other.ilpAddress,
-    http: {
-      outgoing: {
-        endpoint: `${other.connector}/ilp`,
-        callbackEndpoint: `${other.connector}/ilp/callback`,
-        authToken: PEER_TOKEN
-      },
-      incoming: { authToken: PEER_TOKEN }
-    }
-  }));
+  for (const [otherKey, other] of Object.entries(nodes)) {
+    if (otherKey === key) continue;
+    const peerId = node.peers[otherKey];
+    await step(`peer -> ${other.ilpAddress}`, () => admin.createPeer({
+      id: peerId,
+      name: other.label,
+      assetCode: ASSET,
+      assetScale: SCALE,
+      ilpStaticAddress: other.ilpAddress,
+      http: {
+        outgoing: {
+          endpoint: `${other.connector}/ilp`,
+          callbackEndpoint: `${other.connector}/ilp/callback`,
+          authToken: peerToken(key, otherKey)
+        },
+        incoming: { authToken: peerToken(key, otherKey) }
+      }
+    }));
 
-  if (!state.funded[key]) {
-    await step(`liquidity ${(PEER_LIQUIDITY / 10 ** SCALE).toFixed(2)} ${ASSET}`, () =>
-      admin.depositLiquidity(node.peerIdForOther, ASSET, PEER_LIQUIDITY, SCALE));
-    state.funded[key] = true; save();
-  } else console.log('  exists   liquidity (already funded)');
+    // state.funded[key] was a boolean when each node had one peer (that peer was funded)
+    if (state.funded[key] === true) state.funded[key] = { [key === 'a' ? 'b' : 'a']: true };
+    state.funded[key] ??= {};
+    if (!state.funded[key][otherKey]) {
+      await step(`liquidity ${(PEER_LIQUIDITY / 10 ** SCALE).toFixed(2)} ${ASSET} on peer ${other.ilpAddress}`, () =>
+        admin.depositLiquidity(peerId, ASSET, PEER_LIQUIDITY, SCALE));
+      state.funded[key][otherKey] = true; save();
+    } else console.log(`  exists   liquidity on peer ${other.ilpAddress}`);
+  }
 }
 
 console.log('\nWallet addresses:');

@@ -2,6 +2,7 @@
 // End-to-end check of the two money movements a bond needs:
 //   1. Purchase: US investor (Node A) pays the NL issuer (Node B) the face value.
 //   2. Coupon:   NL issuer (Node B) pays the US investor (Node A) one coupon.
+//   3, 4. With Node C (RHYZA_NODES=3): Node C's holder buys from Node B, and Node A pays Node C.
 // Exits non-zero if either leg fails, so it can gate later phases.
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -37,4 +38,15 @@ if (bought) await leg('2. Coupon    B -> A', {
   from: B, to: A, senderWallet: wallets.issuer.address, receiverWallet: wallets.investor.address,
   amount: coupon, metadata: { bondId: bond.id, type: 'coupon', period: 1 }
 }, coupon);
-console.log(process.exitCode ? '\nSmoke test FAILED. See rhyza/README.md troubleshooting.' : '\nSmoke test passed: bond purchase and coupon both settled over ILP between two Rhyza nodes.');
+if (nodes.c && bought) {
+  const C = createRhyzaAdmin(nodes.c.adminUrl);
+  await leg('3. Purchase  C -> B', {
+    from: C, to: B, senderWallet: wallets.holder.address, receiverWallet: wallets.issuer.address,
+    amount: 2500, metadata: { bondId: bond.id, type: 'purchase' }
+  }, 2500);
+  await leg('4. Transfer  A -> C', {
+    from: A, to: C, senderWallet: wallets.investor.address, receiverWallet: wallets.holder.address,
+    amount: 250, metadata: { type: 'payment' }
+  }, 250);
+}
+console.log(process.exitCode ? '\nSmoke test FAILED. See rhyza/README.md troubleshooting.' : '\nSmoke test passed: every leg settled over ILP between the Rhyza nodes.');

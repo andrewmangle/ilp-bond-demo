@@ -193,6 +193,34 @@ the Admin API (`lib/rails/rhyza/open-payments.js`). Once 5 and 6 are fixed, the 
 consent screen at `/rhyza/consent/<node>` (the `IDP_URL`s already point there), and `payUnderGrant` uses
 the client in `lib/rhyza-open-payments.mjs`.
 
+## Phase 5 (third node, USD)
+
+`RHYZA_NODES=3` adds Node C (`docker-compose.node-c.yaml`: Node B's file with `-c` names, ILP address
+`private.rhyza.c`, host ports admin 5001, Open Payments 5002, auth 5003, IdP 5004, ase-mock 5300). It runs
+Node B's images, so nothing new is built, and has Node B's compose fixes built in. Every node peers with
+both others, with 10,000.00 USD of liquidity on each peer.
+
+- **Start:** `RHYZA_NODES=3 ./rhyza/setup.sh up`, `RHYZA_NODES=3 node rhyza/seed.mjs`, then
+  `RHYZA_NODES=3 node rhyza/bond-smoke-test.mjs`, which adds C to B (25.00) and A to C (2.50). For the app:
+  `RHYZA_NODES=3 PAYMENT_RAIL=rhyza scripts/demo-start.sh`, remembered in `data/rhyza.nodes`.
+  `down`/`reset`/`status` include Node C whenever its containers exist.
+- **Memory:** Rhyza went from about 4.9 GiB (47 containers) to 6.7 GiB (69); Node C is 2.1 GiB, of which
+  Kafka is about 0.95 GiB.
+- **Peer tokens:** each pair needs its own auth token (`peerToken()` in `config.mjs`). A node's connector
+  identifies the sending peer by the incoming token alone, so with one shared token, packets from Node C were
+  taken as Node A's and the reply went to Node A (`no fulfill/reject callback received before expiry`).
+  The Admin API can't change or remove a peer, so fixing that meant `setup.sh reset`.
+- **App:** with Node C the app shows a Cape Town node in USD (`RHYZA_CAPETOWN_CURRENCY` to change), with
+  Amara Dube seeded there. A mint deposits liquidity on every peer of the node.
+
+**Stopped: Node B's Kafka after the three-node reset.** The smoke test passed on the fresh stack, but Seed
+Demo failed twice with `Funding Sophie Janssen did not complete (SENDING)`. The Hague payments stay
+`CREATED` because Node B never sends the payment-created webhook that `ase-mock-service-b` approves on.
+`kafka-b` keeps rebalancing the `notifications-event-handler` group every 5 s: `Error COORDINATOR_NOT_AVAILABLE
+when storing group assignment during SyncGroup` (`__consumer_offsets` partition 38). Node A's and Node C's
+brokers show none of this. Not yet tried, waiting for Andrew: restart `kafka-b` and
+`notifications-event-handler-service-b` (or `setup.sh reset` again), then Seed Demo.
+
 ## Switching between the Rafiki demo and this playground
 
 The Rafiki demo on `main` keeps working; nothing in this folder changes it. The two stacks

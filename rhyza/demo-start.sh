@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Starts the Rhyza version of the demo: the two-node Rhyza playground (Docker), its peers and liquidity
+# Starts the Rhyza version of the demo: the Rhyza playground (Docker), its peers and liquidity
 # (rhyza/seed.mjs, safe to re-run), then the demo app with PAYMENT_RAIL=rhyza, and prints the URLs.
 # Also reached as `PAYMENT_RAIL=rhyza scripts/demo-start.sh`. The Rafiki stack must be stopped first.
+# RHYZA_NODES=3 adds Node C (Cape Town); the choice is remembered for the next start (data/rhyza.nodes).
 source "$(dirname "$0")/../scripts/demo-lib.sh"
 RAIL_FILE=$DATA_DIR/app.rail
+NODES_FILE=$DATA_DIR/rhyza.nodes
+export RHYZA_NODES="${RHYZA_NODES:-$(cat "$NODES_FILE" 2>/dev/null || echo 2)}"
+echo "$RHYZA_NODES" >"$NODES_FILE"
 
 if docker ps --format '{{.Names}}' | grep -q '^rafiki-'; then
   echo "The Rafiki stack is running and uses the same ports. Stop it first: scripts/demo-stop.sh"
@@ -19,6 +23,7 @@ echo "Starting the Rhyza nodes (Docker; the first build takes a while, log: $DAT
 echo "Waiting for them:"
 wait_for "Node A admin API (HBCU)" http://localhost:3001/assets
 wait_for "Node B admin API (Hague)" http://localhost:4001/assets
+[ "$RHYZA_NODES" = 3 ] && wait_for "Node C admin API (Cape Town)" http://localhost:5001/assets
 
 printf '  %-28s' "Peers and liquidity"
 for attempt in 1 2 3 4 5; do
