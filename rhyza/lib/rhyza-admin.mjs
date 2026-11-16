@@ -37,7 +37,11 @@ export function createRhyzaAdmin(baseUrl) {
     listAssets: () => call('GET', '/assets'),
     createWalletAddress: (pathName, assetCode, publicName) =>
       call('POST', '/wallet-addresses', { pathName, assetCode, publicName }),
+    // POST /wallet-addresses/{id}/keys with an Ed25519 public JWK (an Open Payments client's key)
+    createWalletAddressKey: (walletAddressId, jwk) => call('POST', `/wallet-addresses/${encodeURIComponent(walletAddressId)}/keys`, jwk),
     createPeer: (peer) => call('POST', '/peers', peer),
+    // GET /grants/{id}: a grant with its accesses and interaction
+    getGrant: (id) => call('GET', `/grants/${encodeURIComponent(id)}`),
     depositLiquidity: (peerId, assetCode, amount, amountScale) =>
       call('POST', '/liquidity/deposit', { peerId, assetCode, amount, amountScale }),
     setRate: (sourceAssetCode, destinationAssetCode, rate, { peerId = null, rateTtlSecs = 3600 } = {}) =>

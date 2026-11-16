@@ -9,6 +9,30 @@ services:
     environment:
       REDIS_URL: redis-b:6379
       SESSION_SECRET: local-dev-session-secret-not-for-production
+      IDP_URL: http://localhost:3040/rhyza/consent/hague
+      # The service reads OPEN_PAYMENTS_AUTH_SERVER_URL; the compose file sets OPEN_PAYMENTS_AUTH_SERVICE_URL,
+      # so Node B fell back to the default http://localhost:3003 (Node A's auth server) for the interaction
+      # and continue URLs it hands out.
+      OPEN_PAYMENTS_AUTH_SERVER_URL: http://localhost:4003
     depends_on:
       redis-b:
         condition: service_healthy
+
+  # Node B's resource server has no OPEN_PAYMENTS_AUTH_SERVICE_URL (Node A's sets it), so Node B's wallet
+  # address documents give "authServer": "localhost:3002" (no scheme, and Node A's resource server) and no
+  # client can find Node B's auth server.
+  open-payments-resource-service-b:
+    environment:
+      OPEN_PAYMENTS_AUTH_SERVICE_URL: http://localhost:4003
+
+  # Neither auth server sets IDP_URL, the identity provider (the FSP's consent screen) that
+  # GET /interaction/{grantId}/start redirects to. On the Rhyza rail the demo app is each node's FSP, so the
+  # consent screen is the app's page (lib/rails/rhyza/consent.js). Only the browser follows this URL.
+  # (Node B's IDP_URL is set with its other fixes above.)
+  open-payments-auth-service:
+    environment:
+      IDP_URL: http://localhost:3040/rhyza/consent/hbcu
+  # Same default as above, if the IdP service ever uses it
+  idp-interaction-service-b:
+    environment:
+      OPEN_PAYMENTS_AUTH_SERVER_URL: http://localhost:4003

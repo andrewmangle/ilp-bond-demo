@@ -159,6 +159,40 @@ between the nodes; the app's ledger books the Hague node's accounts in EUR (`lib
 This is not Rhyza doing FX: the Phase 3 acceptance (Rhyza's quote shows the converted amount) still waits on
 #424 and #425, and the stash still holds that code.
 
+## Phase 4 (grants): blocked by Rhyza
+
+Spike on Nov 15, 2026: `node rhyza/grant-spike.mjs` runs a coupon under an Open Payments grant with no
+browser. The client code is `lib/rhyza-open-payments.mjs` (signed GNAP and resource server requests, the
+IdP API); the Admin API gained `createWalletAddressKey` and `getGrant`.
+
+What works:
+- A client wallet address on Node A with a registered Ed25519 key, served at `.../jwks.json`.
+- A signed interactive grant request to Node B's auth server, with `debitAmount` limits and an interval.
+- `GET /interaction/{id}/start` redirects to `IDP_URL` (the consent screen) with `interactId`; the IdP API
+  (`GET /grant/{id}`, `POST /interaction/{id}/accept`, header `x-idp-secret: idp-secret`) shows the grant's
+  access and limits and records the decision.
+
+What doesn't (each seen at least twice; texts in `UPSTREAM_ISSUES.md` 5 to 7, not filed yet):
+- **Finish always answers 401**, because the auth API's GetGrant never returns `interactionNonce`. So no
+  `interact_ref`, no continue, no token. (Continuing with the `interactRef` read from the Admin API gives
+  500: the grant is still PENDING.)
+- **Open Payments `POST /quotes` answers 404 for a receiver on the other node**, so even with a token an
+  Open Payments client can't pay across nodes (coupons go B to A).
+- **The resource server checks no token at all**: quotes and outgoing payments go through with a made-up
+  token, quotes with none. Grant limits aren't enforced either (upstream #278, open).
+
+Compose fixes added to `docker-compose.override.yaml` on the way (texts for a #466 comment, not posted):
+Node B's auth server reads `OPEN_PAYMENTS_AUTH_SERVER_URL`, not the `..._SERVICE_URL` the compose sets, so
+it handed out Node A's URLs; Node B's resource server had no auth server URL; neither auth server had
+`IDP_URL`. Also, the interaction cookie is `Secure`, so over plain http it is only set with
+`X-Forwarded-Proto: https`; a browser can't send that, so the FSP (this app) would have to make the start
+and finish calls itself.
+
+The app is unchanged: on the Rhyza rail grants are still recorded by the app and payments made through
+the Admin API (`lib/rails/rhyza/open-payments.js`). Once 5 and 6 are fixed, the plan is: the app serves the
+consent screen at `/rhyza/consent/<node>` (the `IDP_URL`s already point there), and `payUnderGrant` uses
+the client in `lib/rhyza-open-payments.mjs`.
+
 ## Switching between the Rafiki demo and this playground
 
 The Rafiki demo on `main` keeps working; nothing in this folder changes it. The two stacks

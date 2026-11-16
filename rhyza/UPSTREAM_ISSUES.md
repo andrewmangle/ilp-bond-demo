@@ -9,6 +9,10 @@ Found against commit `259a9b94fb8feb14882997ed69cc188f905ad68b` (also `main` on 
 | 2 | Already filed as [#424](https://github.com/interledger/rhyza/issues/424); we added a [repro comment](https://github.com/interledger/rhyza/issues/424#issuecomment-6905653965) with the workaround |
 | 3 | Filed as [#465](https://github.com/interledger/rhyza/issues/465) |
 | 4 | Filed as [#466](https://github.com/interledger/rhyza/issues/466) |
+| 5 | Phase 4, **not filed yet** (needs Andrew's OK) |
+| 6 | Phase 4, **not filed yet** |
+| 7 | Phase 4, **not filed yet** |
+| 4b | Phase 4, comment for #466, **not posted yet** |
 
 The texts below are the drafts they came from.
 
@@ -91,6 +95,114 @@ a shared session store` and restarts forever.
 `docker-compose.yaml` sets for Node A's `open-payments-auth-service`.
 
 **Fix.** Add `REDIS_URL: redis-b:6379`, `SESSION_SECRET: ...` and `depends_on: redis-b (service_healthy)`.
+
+---
+
+## 5. Interactive grants can never finish: GetGrant drops interactionNonce, so /interaction/{id}/finish always answers 401
+
+**Found at:** `main` [`259a9b94`](https://github.com/interledger/rhyza/tree/259a9b94fb8feb14882997ed69cc188f905ad68b), two-node compose.
+
+## What happens
+
+An interactive outgoing-payment grant can't be finished. After the client's grant request, `GET /interaction/{id}/start` (session cookie set, redirect to `IDP_URL`) and the IdP's `POST /interaction/{id}/accept` (202), the browser's `POST /interaction/{id}/finish` with the session cookie always answers **401**. The client never gets `interact_ref`, so it can't continue the grant and never gets a token.
+
+The session is fine: Redis holds `op-auth:session:<id>` with `interactionSessionId` set to the grant's nonce, and the same cookie is accepted and refreshed by the finish request.
+
+## Why
+
+The finish route [compares the session's nonce with `grant.interactionNonce`](https://github.com/interledger/rhyza/blob/259a9b94fb8feb14882997ed69cc188f905ad68b/packages/open-payments-auth-service/src/routes/interaction.ts#L44), and `grant` comes from `authClient.getGrant()`. But `auth-api-service` [`_toPbGrant`](https://github.com/interledger/rhyza/blob/259a9b94fb8feb14882997ed69cc188f905ad68b/packages/auth-api-service/src/grpc/grpc-service.ts#L542-L585) never calls `setInteractionNonce`, so `fromPbGrant` in `auth-client-lib` reads `""`, and the comparison can never match.
+
+After the IdP accepts, the Admin API's `GET /grants/{id}` shows `state: "PENDING"`, `interaction.state: "APPROVED"`. Continuing with that `interactRef` anyway answers `500 Unhandled error` (the grant isn't `APPROVED`, since finish never ran).
+
+## Expected
+
+`_toPbGrant` sets `interactionNonce`, so finish moves the grant to `APPROVED` and redirects to the client's finish URI with `hash` and `interact_ref`.
+
+## Repro
+
+1. Register an Ed25519 key for a client wallet address (`POST /wallet-addresses/{id}/keys`).
+2. Signed `POST` to the auth server: `outgoing-payment` access for another wallet, `interact: { start: ["redirect"], finish: { method: "redirect", uri, nonce } }`.
+3. `GET interact.redirect`, keep the cookie (over plain http the cookie is only set with `X-Forwarded-Proto: https`; see #466).
+4. `POST {idp}/interaction/{id}/accept` with `x-idp-secret`.
+5. `POST {auth}/interaction/{id}/finish` with the cookie: 401.
+
+Also seen: the `clientName` passed to the IdP is empty although the client wallet address has a `publicName`.
+
+---
+
+## 6. Open Payments POST /quotes answers 404 for a receiver on another node
+
+**Found at:** `main` [`259a9b94`](https://github.com/interledger/rhyza/tree/259a9b94fb8feb14882997ed69cc188f905ad68b), two-node compose.
+
+## What happens
+
+On Node B's Open Payments resource server, `POST /quotes` with `receiver` set to a payment intent on Node A (its `openPaymentsUrl`) always answers:
+
+```
+404 {"error":{"code":"NOT_FOUND","description":"Payment intent '<id>' not found"}}
+```
+
+The same request with a receiver on Node B succeeds, and the Admin API's `POST /quotes` with the same remote `paymentIntentUrl` succeeds too. So an Open Payments client can't pay anyone on another node.
+
+## Why (likely)
+
+The route creates the quote, then [looks up `result.paymentIntentId`](https://github.com/interledger/rhyza/blob/259a9b94fb8feb14882997ed69cc188f905ad68b/packages/open-payments-resource-service/src/routes/quotes.ts#L169-L171) to fill in `receiveAmount` and `receiver`. For a remote receiver that id doesn't resolve on the sender's node: the quote's intent is the imported copy, and the lookup fails. I haven't checked whether the id is the remote one or the copy's not yet readable, but retrying doesn't help.
+
+## Repro
+
+1. Two nodes peered in USD.
+2. On A: `POST /payment-intents` for a wallet on A (Admin API).
+3. On B: `POST /quotes` on the Open Payments resource server with `walletAddress` a wallet on B, `receiver` the intent's `openPaymentsUrl`, `method: "ilp"`, a `receiveAmount`: 404.
+
+---
+
+## 7. Open Payments resource server does not check the GNAP access token
+
+**Found at:** `main` [`259a9b94`](https://github.com/interledger/rhyza/tree/259a9b94fb8feb14882997ed69cc188f905ad68b), two-node compose.
+
+## What happens
+
+The Open Payments resource server doesn't check the GNAP access token. On Node B, `POST /quotes` and `POST /outgoing-payments` succeed with `Authorization: GNAP <any string>`, and `POST /quotes` succeeds with no `Authorization` header at all. The outgoing payment was created and sent.
+
+## Why
+
+`getGnapToken` ([auth.ts](https://github.com/interledger/rhyza/blob/259a9b94fb8feb14882997ed69cc188f905ad68b/packages/open-payments-resource-service/src/auth.ts#L3)) only copies the header onto the request. Nothing introspects it or checks its access against the request (incoming payments carry a `TODO: implement token introspection` at [incoming-payments.ts#L194](https://github.com/interledger/rhyza/blob/259a9b94fb8feb14882997ed69cc188f905ad68b/packages/open-payments-resource-service/src/routes/incoming-payments.ts#L194)). Outgoing payments are also created with `grantId: undefined` ([outgoing-payments.ts#L156](https://github.com/interledger/rhyza/blob/259a9b94fb8feb14882997ed69cc188f905ad68b/packages/open-payments-resource-service/src/routes/outgoing-payments.ts#L156)), so no grant is charged; limits are tracked in #278.
+
+## Expected
+
+Each resource server request is checked against the token's grant (introspection, which the Auth BC already has from #193): the action, the `identifier` (wallet address) and, from #278, the limits. A missing or unknown token answers 401.
+
+Filing in case it's not tracked elsewhere; if token checking is meant to happen in a gateway in front of the service, a note in the compose file would help.
+
+---
+
+## 4b. Comment for #466: more two-node compose problems
+
+Three more two-node compose problems at [`259a9b94`](https://github.com/interledger/rhyza/tree/259a9b94fb8feb14882997ed69cc188f905ad68b), all on Node B, found while trying interactive grants:
+
+1. **Wrong auth server URLs.** `open-payments-auth-service` reads `OPEN_PAYMENTS_AUTH_SERVER_URL` ([service.ts#L29](https://github.com/interledger/rhyza/blob/259a9b94fb8feb14882997ed69cc188f905ad68b/packages/open-payments-auth-service/src/service.ts#L29)), but both compose files set `OPEN_PAYMENTS_AUTH_SERVICE_URL`. Node A gets the right value by luck (the default is `http://localhost:3003`); Node B's auth server hands out `interact.redirect` and `continue.uri` on `localhost:3003`, Node A's auth server. Same default in `idp-interaction-service`.
+2. **No auth server in Node B's wallet addresses.** `open-payments-resource-service-b` has no `OPEN_PAYMENTS_AUTH_SERVICE_URL`, so its wallet address documents say `"authServer": "localhost:3002"` (the code default: no scheme, and Node A's resource server port).
+3. **No `IDP_URL`** on either auth server, so `GET /interaction/{id}/start` throws (`new URL(undefined)`) and answers 500.
+
+And one that affects both nodes: the interaction session cookie is `Secure` by default (`@fastify/session`, [service.ts#L118](https://github.com/interledger/rhyza/blob/259a9b94fb8feb14882997ed69cc188f905ad68b/packages/open-payments-auth-service/src/service.ts#L118)), so over the playground's plain http the start route never sets it and finish answers 401. Sending `X-Forwarded-Proto: https` works around it (`TRUST_PROXY` defaults to true), but a browser won't. `cookie: { secure: 'auto' }` would fit local dev.
+
+What we use meanwhile:
+
+```yaml
+  open-payments-auth-service:
+    environment:
+      IDP_URL: <your consent screen>
+  open-payments-auth-service-b:
+    environment:
+      OPEN_PAYMENTS_AUTH_SERVER_URL: http://localhost:4003
+      IDP_URL: <your consent screen>
+  open-payments-resource-service-b:
+    environment:
+      OPEN_PAYMENTS_AUTH_SERVICE_URL: http://localhost:4003
+  idp-interaction-service-b:
+    environment:
+      OPEN_PAYMENTS_AUTH_SERVER_URL: http://localhost:4003
+```
 
 ---
 
