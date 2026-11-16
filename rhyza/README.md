@@ -125,7 +125,7 @@ what is owed is kept). The Rafiki rail still goes down to 0.01. Worth reporting 
 
 ## Phase 3 (second currency): blocked by Rhyza
 
-Tried on Nov 16, 2026: EUR asset and an EUR issuer wallet on Node B, peering kept in USD, rates pushed
+Tried on Nov 15, 2026: EUR asset and an EUR issuer wallet on Node B, peering kept in USD, rates pushed
 with `setRate()` on both nodes. Rhyza at the pinned commit (which is also upstream `main`) cannot pay
 across a peer in a different currency, in either direction:
 
@@ -134,7 +134,7 @@ across a peer in a different currency, in either direction:
 - The inbound rate lookup asks for USD -> USD instead of USD -> EUR (quotes then fail with `13 INTERNAL`).
   A USD -> USD peer rate works around this one; the quotes then complete at 0.92.
 
-Details and paste-ready issue texts: `UPSTREAM_ISSUES.md`. The Phase 3 code (config with per-node
+Reported upstream as #424 and #425 (already open; we added repro comments), plus #465 and #466; see `UPSTREAM_ISSUES.md`. The Phase 3 code (config with per-node
 currency and `RATES_PER_USD`, seed with assets and rates, smoke test asserting the quote's converted
 amount) is kept in the git stash "Phase 3 WIP"; `git stash pop` restores it. Both nodes stay in USD.
 The playground still holds the EUR asset, the `nl-bond-issuer-eur` wallet and the pushed EUR rates

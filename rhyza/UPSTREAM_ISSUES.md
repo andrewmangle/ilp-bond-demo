@@ -1,8 +1,16 @@
 # Rhyza issues found while porting the bond demo
 
-Draft issue texts for https://github.com/interledger/rhyza/issues, ready to paste. None has been filed.
-All are against commit `259a9b94fb8feb14882997ed69cc188f905ad68b` (Nov 13, 2026; also `main` on
-Nov 16, 2026), running `docker/docker-compose.yaml` + `docker/docker-compose.node-b.yaml`.
+Found against commit `259a9b94fb8feb14882997ed69cc188f905ad68b` (also `main` on Nov 15, 2026), running
+`docker/docker-compose.yaml` + `docker/docker-compose.node-b.yaml`.
+
+| # | Status on GitHub (Nov 15, 2026) |
+|---|---|
+| 1 | Already filed as [#425](https://github.com/interledger/rhyza/issues/425); we added a [repro comment](https://github.com/interledger/rhyza/issues/425#issuecomment-6905654249) |
+| 2 | Already filed as [#424](https://github.com/interledger/rhyza/issues/424); we added a [repro comment](https://github.com/interledger/rhyza/issues/424#issuecomment-6905653965) with the workaround |
+| 3 | Filed as [#465](https://github.com/interledger/rhyza/issues/465) |
+| 4 | Filed as [#466](https://github.com/interledger/rhyza/issues/466) |
+
+The texts below are the drafts they came from.
 
 ---
 
