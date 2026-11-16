@@ -10,7 +10,7 @@
 <div id="rolebar" class="rolebar"></div>
 <main>
   <h1>Students</h1>
-  <p class="sub">Local Rafiki network: HBCU node (USD), Hague node (EUR) and Cape Town node (ZAR).</p>
+  <p class="sub" id="network-sub">Local Rafiki network: HBCU node (USD), Hague node (EUR) and Cape Town node (ZAR).</p>
 
   <div id="bank-note" hidden>
     <section>
@@ -58,6 +58,12 @@
 
 <script src="/common.js"></script>
 <script>
+  // The network line from the running rail (Rafiki or Rhyza)
+  Promise.all([fetch('/api/nodes').then((r) => r.json()), fetch('/api/demo/health').then((r) => r.json())]).then(([list, health]) => {
+    const names = list.map((n) => `${n.label} (${n.currency})`)
+    const joined = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0]
+    document.getElementById('network-sub').textContent = `Local ${health.rail === 'rhyza' ? 'Rhyza' : 'Rafiki'} network: ${joined}.`
+  }).catch(() => {})
   let me = null
 
   function renderDirectory() {

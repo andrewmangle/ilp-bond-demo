@@ -47,10 +47,10 @@ case "${1:-up}" in
       compose up -d --build
     fi
     echo
-    echo "Node A (US)          admin http://localhost:3001   open payments http://localhost:3002"
-    echo "Node B (Netherlands) admin http://localhost:4001   open payments http://localhost:4002"
-    (( ${#NODE_C[@]} )) && echo "Node C               admin http://localhost:5001   open payments http://localhost:5002"
-    echo "Kafka consoles       http://localhost:8080 (A)     http://localhost:8081 (B)"
+    echo "Node A (BSU)              admin http://localhost:3001   open payments http://localhost:3002"
+    echo "Node B (HBCU South East)  admin http://localhost:4001   open payments http://localhost:4002"
+    (( ${#NODE_C[@]} )) && echo "Node C (HBCU South West)  admin http://localhost:5001   open payments http://localhost:5002"
+    echo "Kafka consoles            http://localhost:8080 (A)     http://localhost:8081 (B)"
     echo "Next: node rhyza/seed.mjs && node rhyza/bond-smoke-test.mjs"
     ;;
   down)   compose down ;;

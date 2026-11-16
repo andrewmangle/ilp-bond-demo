@@ -6,8 +6,8 @@
 // Peers and their liquidity are set up once by rhyza/seed.mjs and survive a Reset Demo.
 //
 // Seed Demo resets, then sets up the starting point: funded treasuries on every node, funded students Jordan
-// (HBCU), Sophie (Hague) and, with Node C, Amara (Cape Town), the Ellis Family Savings account on Hague, and
-// Sophie's bond. No holdings yet.
+// (BSU), Sophie (HBCU South East) and, with Node C, Amara (HBCU South West), the Ellis Family Savings account on
+// HBCU South East, and Sophie's bond. No holdings yet.
 
 const { NODES } = require('./nodes')
 const { admin } = require('./rhyza')
@@ -36,7 +36,7 @@ const SEED = {
     { node: 'hague', path: 'ellis-family', funding: null },
     { node: 'capetown', path: 'amara', funding: '1000' }
   ],
-  bond: { issuer: { node: 'hague', path: 'sophie' }, name: 'Hague Housing Bond', size: '1000', annualRate: '6', termDays: 365, minSlice: '100', couponFrequency: 'daily' }
+  bond: { issuer: { node: 'hague', path: 'sophie' }, name: 'South East Housing Bond', size: '1000', annualRate: '6', termDays: 365, minSlice: '100', couponFrequency: 'daily' }
 }
 
 // --- Health ---
@@ -131,7 +131,7 @@ async function seed({ confirm } = {}) {
     if (!account) throw new Error(`${NODES[node].label} has no ${path} account`)
     return account
   }
-  for (const s of SEED.students.filter((s) => NODES[s.node])) { // Cape Town only with Node C
+  for (const s of SEED.students.filter((s) => NODES[s.node])) { // HBCU South West only with Node C
     const account = await byPath(s.node, s.path)
     if (s.funding) {
       const paid = await centralBank.fundStudent(s.node, account.id, s.funding)

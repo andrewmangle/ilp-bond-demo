@@ -71,6 +71,19 @@
     const c = el('text', { x: p.x, y: p.y + 55, class: 'cur' }); c.textContent = p.cur; g.appendChild(c)
     $('nodes').appendChild(g)
   }
+  // Names and currencies come from the running rail (the Rhyza rail names and prices its nodes differently and
+  // may run two of them); the defaults above are the Rafiki rail's
+  fetch('/api/nodes').then((r) => r.json()).then((list) => {
+    const running = new Map(list.map((n) => [n.key, n]))
+    for (const key of Object.keys(POS)) {
+      const n = running.get(key), g = $(`node-${key}`)
+      if (!n) { g.style.display = 'none'; continue }
+      const [label, cur] = g.querySelectorAll('text')
+      label.textContent = n.label.replace(/ node$/, '')
+      cur.textContent = n.currency
+    }
+    for (const [a, b] of PAIRS) if (!running.has(a) || !running.has(b)) $(routeId(a, b)).style.display = 'none'
+  }).catch(() => {})
 
   // A coin travels along the route from the sender's node to the receiver's; within one node, the node pulses
   function flash(from, to) {

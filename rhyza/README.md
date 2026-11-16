@@ -151,8 +151,8 @@ between the nodes; the app's ledger books the Hague node's accounts in EUR (`lib
 - Rates: a central bank's own setting wins, else the ECB reference rate from `https://api.frankfurter.dev`
   (no key; fetched at start and every 6 hours, stored in `market_rates`), else the old 0.92 baseline. The
   central bank page says which one is in use. Nothing is pushed to Rhyza's `POST /rates` any more.
-- `RHYZA_HAGUE_CURRENCY=USD` keeps the Hague node in USD. Changing it needs Reset Demo (accounts keep the
-  currency they were opened in).
+- Since the HBCU pivot (below) Node B is in USD by default; `RHYZA_HAGUE_CURRENCY=EUR` brings the conversion
+  back. Changing it needs Reset Demo (accounts keep the currency they were opened in).
 - Test: `node localenv/university-payments/test/rhyza-fx.e2e.mjs` (USD to EUR, EUR to USD, an EUR bond
   bought in USD). Checked by hand: a 0.41 EUR coupon arrives as 0.45 USD.
 
@@ -220,6 +220,21 @@ Demo failed twice with `Funding Sophie Janssen did not complete (SENDING)`. The 
 when storing group assignment during SyncGroup` (`__consumer_offsets` partition 38). Node A's and Node C's
 brokers show none of this. Not yet tried, waiting for Andrew: restart `kafka-b` and
 `notifications-event-handler-service-b` (or `setup.sh reset` again), then Seed Demo.
+
+## Pivot: a US HBCU network (Nov 15, 2026)
+
+Andrew's call: the Rhyza version shows a domestic network, the Rafiki version stays global. All nodes are in
+USD, which keeps clear of #424 and #425:
+
+| Rhyza node | App key | Name | Story student |
+|---|---|---|---|
+| A (3001) | `hbcu` | BSU | Jordan Ellis |
+| B (4001) | `hague` | HBCU South East | Sophie Janssen (issues the South East Housing Bond), Ellis Family Savings |
+| C (5001, `RHYZA_NODES=3`) | `capetown` | HBCU South West | Amara Dube |
+
+The app keys and the Rhyza wallet pathNames stay as they were, so stored rows and `.state.json` still work.
+The students, live feed and control pages now read node names and currencies from `/api/nodes`, which also
+fixes them on the Rafiki rail if its names change.
 
 ## Switching between the Rafiki demo and this playground
 

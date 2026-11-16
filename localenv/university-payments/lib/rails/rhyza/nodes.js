@@ -1,9 +1,9 @@
-// The Rhyza playground's nodes, acting as university central banks. Same keys as the Rafiki rail (hbcu, hague,
-// capetown) so pages and stored rows read the same. Topology comes from rhyza/config.mjs: Node A and Node B,
-// plus Node C (Cape Town) when RHYZA_NODES=3.
+// The Rhyza playground's nodes: a US network of HBCU central banks, all in USD (the Rafiki rail is the global
+// one). BSU is Node A, HBCU South East Node B and, with RHYZA_NODES=3, HBCU South West Node C (rhyza/config.mjs).
+// The keys stay the Rafiki rail's (hbcu, hague, capetown) so pages and stored rows work on both rails.
 //
 // `currency` is what the node's customer accounts hold in the app's ledger; `railCurrency` is what its Rhyza
-// wallets hold and its payments move (see fx.js). RHYZA_HAGUE_CURRENCY=USD keeps the Hague node in USD.
+// wallets hold and its payments move (see fx.js). RHYZA_HAGUE_CURRENCY=EUR puts Node B in EUR, converted by the app.
 
 const { config } = require('./rhyza')
 const { db } = require('../../db')
@@ -22,26 +22,26 @@ const node = (c, extra) => ({
 
 const NODES = {
   hbcu: node(config.nodes.a, {
-    label: 'HBCU node',
-    bankName: 'HBCU central bank',
+    label: 'BSU node',
+    bankName: 'BSU central bank',
     rhyza: 'Node A',
     aseMock: 'http://localhost:3000',
     openPayments: 'http://localhost:3002',
     auth: 'http://localhost:3003'
   }),
   hague: node(config.nodes.b, {
-    label: 'Hague node',
-    bankName: 'Hague central bank',
+    label: 'HBCU South East node',
+    bankName: 'HBCU South East central bank',
     rhyza: 'Node B',
-    currency: process.env.RHYZA_HAGUE_CURRENCY || 'EUR',
+    currency: process.env.RHYZA_HAGUE_CURRENCY || 'USD', // EUR shows the app-side conversion (fx.js)
     aseMock: 'http://localhost:4300',
     openPayments: 'http://localhost:4002',
     auth: 'http://localhost:4003'
   }),
   ...(config.nodes.c ? {
     capetown: node(config.nodes.c, {
-      label: 'Cape Town node',
-      bankName: 'Cape Town central bank',
+      label: 'HBCU South West node',
+      bankName: 'HBCU South West central bank',
       rhyza: 'Node C',
       currency: process.env.RHYZA_CAPETOWN_CURRENCY || 'USD',
       aseMock: 'http://localhost:5300',

@@ -2,7 +2,7 @@
 # Starts the Rhyza version of the demo: the Rhyza playground (Docker), its peers and liquidity
 # (rhyza/seed.mjs, safe to re-run), then the demo app with PAYMENT_RAIL=rhyza, and prints the URLs.
 # Also reached as `PAYMENT_RAIL=rhyza scripts/demo-start.sh`. The Rafiki stack must be stopped first.
-# RHYZA_NODES=3 adds Node C (Cape Town); the choice is remembered for the next start (data/rhyza.nodes).
+# RHYZA_NODES=3 adds Node C (HBCU South West); the choice is remembered for the next start (data/rhyza.nodes).
 source "$(dirname "$0")/../scripts/demo-lib.sh"
 RAIL_FILE=$DATA_DIR/app.rail
 NODES_FILE=$DATA_DIR/rhyza.nodes
@@ -21,9 +21,9 @@ fi
 echo "Starting the Rhyza nodes (Docker; the first build takes a while, log: $DATA_DIR/rhyza-up.log)…"
 ./rhyza/setup.sh up >"$DATA_DIR/rhyza-up.log" 2>&1 || { echo "setup.sh up failed: see $DATA_DIR/rhyza-up.log"; exit 1; }
 echo "Waiting for them:"
-wait_for "Node A admin API (HBCU)" http://localhost:3001/assets
-wait_for "Node B admin API (Hague)" http://localhost:4001/assets
-[ "$RHYZA_NODES" = 3 ] && wait_for "Node C admin API (Cape Town)" http://localhost:5001/assets
+wait_for "Node A admin API (BSU)" http://localhost:3001/assets
+wait_for "Node B admin API (South East)" http://localhost:4001/assets
+[ "$RHYZA_NODES" = 3 ] && wait_for "Node C admin API (South West)" http://localhost:5001/assets
 
 printf '  %-28s' "Peers and liquidity"
 for attempt in 1 2 3 4 5; do

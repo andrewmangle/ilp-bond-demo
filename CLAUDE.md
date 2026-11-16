@@ -50,7 +50,7 @@ The demo app needs the nodes running and seeded first. Seeding is finished when 
 
 ## Demo app: `localenv/university-payments/`
 
-- **Payment rail** (branch `rhyza-port`): `PAYMENT_RAIL=rafiki` (default) or `rhyza`, switched in `lib/rail.js`. On `rhyza` the rail modules resolve to `lib/rails/rhyza/` and the database is `data/demo-rhyza.db`. Rhyza moves USD only; the app books the Hague node in EUR at the ECB reference rate (`lib/rails/rhyza/fx.js`). Everything below describes the Rafiki rail; see `rhyza/README.md` for Rhyza.
+- **Payment rail** (branch `rhyza-port`): `PAYMENT_RAIL=rafiki` (default) or `rhyza`, switched in `lib/rail.js`. On `rhyza` the rail modules resolve to `lib/rails/rhyza/` and the database is `data/demo-rhyza.db`. On Rhyza the network is US HBCUs, all USD: BSU (`hbcu`), HBCU South East (`hague`) and, with `RHYZA_NODES=3`, HBCU South West (`capetown`). `RHYZA_HAGUE_CURRENCY=EUR` makes the app convert at the ECB rate (`lib/rails/rhyza/fx.js`), since Rhyza moves USD only. Everything below describes the Rafiki rail; see `rhyza/README.md` for Rhyza.
 
 - **Code layout:**
   - `server.js`: Node `http` server, routes and role checks. No dependencies.

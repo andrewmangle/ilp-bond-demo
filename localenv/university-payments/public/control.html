@@ -44,7 +44,13 @@
       <section>
         <h2>Seed and reset</h2>
         <p><b>Seed Demo</b> resets, then sets up the starting point:</p>
-        <ul class="note">
+        <ul class="note" id="seed-rhyza" hidden>
+          <li>The treasuries on every node are funded.</li>
+          <li>Jordan (BSU), Sophie (HBCU South East) and, with Node C, Amara (HBCU South West) are funded students.</li>
+          <li>The Ellis Family Savings account on HBCU South East is ready.</li>
+          <li>Sophie's 1,000 USD South East Housing Bond at 6% for 365 days, with daily coupons, is issued, with no holdings yet.</li>
+        </ul>
+        <ul class="note" id="seed-rafiki">
           <li>The treasuries on all three nodes are funded.</li>
           <li>Jordan (HBCU), Sophie (Hague) and Amara (Cape Town) are funded students.</li>
           <li>The Ellis Family Savings account on Cape Town is ready.</li>
@@ -76,6 +82,11 @@
 
 <script src="/common.js"></script>
 <script>
+  fetch('/api/demo/health').then((r) => r.json()).then((h) => {
+    if (h.rail !== 'rhyza') return
+    document.getElementById('seed-rhyza').hidden = false
+    document.getElementById('seed-rafiki').hidden = true
+  }).catch(() => {})
   const dot = (c) => `<span class="${c.ok ? 'ok-dot' : 'bad-dot'}"></span>${c.ok ? 'up' : `down${c.detail ? ` <span class="note">${esc(c.detail)}</span>` : ''}`}`
 
   async function loadHealth() {

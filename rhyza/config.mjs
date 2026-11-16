@@ -5,7 +5,7 @@ export const ASSET = 'USD'; // stage 1: one shared currency. EUR on Node B comes
 
 export const nodes = {
   a: {
-    label: 'Node A (US, HBCU central bank)',
+    label: 'Node A (BSU central bank)',
     adminUrl: process.env.RHYZA_ADMIN_A ?? 'http://localhost:3001',
     ilpAddress: 'private.rhyza.a',
     connector: 'http://ilp-connector-service:4000',     // docker-network name, not localhost
@@ -15,10 +15,10 @@ export const nodes = {
     openPayments: { dockerHost: 'open-payments-resource-service:3002', localPort: 3002 },
     authUrl: 'http://localhost:3003',
     idpUrl: 'http://localhost:3004',
-    wallets: { investor: ['us-investor', 'US Student Investor'] }
+    wallets: { investor: ['us-investor', 'BSU Student Investor'] }
   },
   b: {
-    label: 'Node B (Netherlands, The Hague central bank)',
+    label: 'Node B (HBCU South East central bank)',
     adminUrl: process.env.RHYZA_ADMIN_B ?? 'http://localhost:4001',
     ilpAddress: 'private.rhyza.b',
     connector: 'http://ilp-connector-service-b:4000',
@@ -27,11 +27,11 @@ export const nodes = {
     openPayments: { dockerHost: 'open-payments-resource-service-b:3002', localPort: 4002 },
     authUrl: 'http://localhost:4003',
     idpUrl: 'http://localhost:4004',
-    wallets: { issuer: ['nl-bond-issuer', 'NL Student Bond Issuer'] }
+    wallets: { issuer: ['nl-bond-issuer', 'HBCU South East Bond Issuer'] } // pathName kept from the first version
   },
   ...(process.env.RHYZA_NODES === '3' ? {
     c: {
-      label: 'Node C (third university central bank)',
+      label: 'Node C (HBCU South West central bank)',
       adminUrl: process.env.RHYZA_ADMIN_C ?? 'http://localhost:5001',
       ilpAddress: 'private.rhyza.c',
       connector: 'http://ilp-connector-service-c:4000',
@@ -39,7 +39,7 @@ export const nodes = {
       openPayments: { dockerHost: 'open-payments-resource-service-c:3002', localPort: 5002 },
       authUrl: 'http://localhost:5003',
       idpUrl: 'http://localhost:5004',
-      wallets: { holder: ['c-bond-holder', 'Node C Student Investor'] }
+      wallets: { holder: ['c-bond-holder', 'HBCU South West Student Investor'] }
     }
   } : {})
 };
